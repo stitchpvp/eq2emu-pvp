@@ -388,6 +388,9 @@
     <ClCompile Include="..\..\source\WorldServer\PVP.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\MasterServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\source\common\Common_Defines.h">
@@ -682,6 +685,9 @@
       <Filter>Header Files\Items</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\WorldServer\PVP.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\MasterServer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

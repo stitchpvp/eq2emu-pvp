@@ -424,6 +424,7 @@
     <ClCompile Include="..\..\source\WorldServer\LoginServer.cpp" />
     <ClCompile Include="..\..\source\WorldServer\LuaFunctions.cpp" />
     <ClCompile Include="..\..\source\WorldServer\LuaInterface.cpp" />
+    <ClCompile Include="..\..\source\WorldServer\MasterServer.cpp" />
     <ClCompile Include="..\..\source\WorldServer\net.cpp" />
     <ClCompile Include="..\..\source\WorldServer\NPC.cpp" />
     <ClCompile Include="..\..\source\WorldServer\NPC_AI.cpp" />
@@ -510,6 +511,7 @@
     <ClInclude Include="..\..\source\WorldServer\LoginServer.h" />
     <ClInclude Include="..\..\source\WorldServer\LuaFunctions.h" />
     <ClInclude Include="..\..\source\WorldServer\LuaInterface.h" />
+    <ClInclude Include="..\..\source\WorldServer\MasterServer.h" />
     <ClInclude Include="..\..\source\WorldServer\MutexHelper.h" />
     <ClInclude Include="..\..\source\WorldServer\MutexList.h" />
     <ClInclude Include="..\..\source\WorldServer\MutexMap.h" />
