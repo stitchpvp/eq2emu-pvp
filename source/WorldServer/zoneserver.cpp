@@ -2770,7 +2770,7 @@ void ZoneServer::RemoveClient(Client* client)
 	if(client)
 	{
 		client->Disconnect();
-
+		
 		LogWrite(ZONE__DEBUG, 0, "Zone", "Sending login equipment appearance updates...");
 		loginserver.SendImmediateEquipmentUpdatesForChar(client->GetPlayer()->GetCharacterID());
 
@@ -2816,13 +2816,9 @@ void ZoneServer::RemoveClient(Client* client)
 			client->GetPlayer()->DismissPet((NPC*)client->GetPlayer()->GetCosmeticPet());
 
 			RemoveSpawn(client->GetPlayer(), false);
-			connected_clients.Remove(client, true, DisconnectClientTimer);
 		}
-		else
-		{
-			LogWrite(ZONE__DEBUG, 0, "Zone", "Removing client '%s' (%u) due to some client zoning...", client->GetPlayer()->GetName(), client->GetPlayer()->GetCharacterID());
-			connected_clients.Remove(client, true, DisconnectClientTimer); // changed from a hardcoded 30000 (30 sec) to the DisconnectClientTimer rule
-		}
+
+		connected_clients.Remove(client, true, DisconnectClientTimer);
 
 		client_spawn_map.Put(client->GetPlayer(), 0);
 
@@ -4652,6 +4648,24 @@ vector<Entity*> ZoneServer::GetPlayers(){
 		ret.push_back(client->GetPlayer());
 	}
 	MClientList.releasereadlock(__FUNCTION__, __LINE__);
+
+	return ret;
+}
+
+Player*	ZoneServer::GetPlayerByID(int32 id) {
+	Player* ret = nullptr;
+	Client* client = nullptr;
+
+	MutexList<Client*>::iterator client_itr = connected_clients.begin();
+
+	while (client_itr.Next()) {
+		client = client_itr->value;
+
+		if (client && client->GetPlayer() && client->GetPlayer()->GetCharacterID() == id) {
+			ret = client->GetPlayer();
+			break;
+		}
+	}
 
 	return ret;
 }

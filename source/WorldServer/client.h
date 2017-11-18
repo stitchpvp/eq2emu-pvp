@@ -464,6 +464,7 @@ private:
 
 	bool m_recipeListSent;
 	bool initial_spawns_sent;
+	bool should_load_spells;
 
 	// int32 = quest id
 	vector<int32> quest_timers;

@@ -175,6 +175,7 @@ Client::Client(EQStream* ieqs) : pos_update(1), quest_pos_timer(2000), lua_debug
 	MQuestTimers.SetName("Client::quest_timers");
 	memset(&incoming_paperdoll, 0, sizeof(incoming_paperdoll));
 	on_auto_mount = false;
+	should_load_spells = true;
 }
 
 Client::~Client() {
@@ -606,17 +607,17 @@ void Client::SendCharInfo(){
 	//ClientPacketFunctions::SendAbilities(this);
 	master_aa_list.DisplayAA(this);
 	ClientPacketFunctions::SendSkillBook(this);
-	if(!player->IsResurrecting()) {
-		ClientPacketFunctions::SendUpdateSpellBook(this);
-		if (!player->IsReturningFromLD())
-			player->ApplyPassiveSpells();
-	}
-	else
-		player->SetResurrecting(false);
-
 	ClientPacketFunctions::SendLoginCommandMessages(this);
 
 	GetCurrentZone()->AddSpawn(player);
+
+	player->ClearProcs();
+
+	if (!player->IsResurrecting()) {
+		ClientPacketFunctions::SendUpdateSpellBook(this);
+	} else {
+		player->SetResurrecting(false);
+	}
 
 	//SendCollectionList();
 	Guild* guild = player->GetGuild();
@@ -661,7 +662,6 @@ void Client::SendCharInfo(){
 	GetPlayer()->ChangeSecondaryWeapon();
 	GetPlayer()->ChangeRangedWeapon();
 	database.LoadBuyBacks(this);
-	
 
 	string zone_motd = GetCurrentZone()->GetZoneMOTD();
 	if (zone_motd.length() > 0 && zone_motd[0] != ' ') {
@@ -681,7 +681,6 @@ void Client::SendCharInfo(){
 	if (firstlogin)
 		firstlogin = false;
 
-	player->ClearProcs();
 	items = player->GetEquippedItemList();
 	if (items && items->size() > 0) {
 		for(int32 i = 0; i < items->size(); i++) {
@@ -892,6 +891,7 @@ bool Client::HandlePacket(EQApplicationPacket *app) {
 									GetPlayer()->SetPendingDeletion(false);
 									GetPlayer()->ResetSavedSpawns();
 									GetPlayer()->SetReturningFromLD(true);
+									should_load_spells = false;
 									GetPlayer()->GetZone()->RemoveDelayedSpawnRemove(GetPlayer());
 								}
 								client->GetCurrentZone()->RemoveClientImmediately(client);
@@ -2401,6 +2401,14 @@ bool Client::Process(bool zone_process) {
 
 		delete app;
 	}
+
+	if (GetCurrentZone() && GetCurrentZone()->GetSpawnByID(GetPlayer()->GetID()) && should_load_spells) {
+		player->ApplyPassiveSpells();
+		database.LoadCharacterActiveSpells(player);
+
+		should_load_spells = false;
+	}
+
 	if(quest_updates) {
 		LogWrite(CCLIENT__DEBUG, 1, "Client", "%s, ProcessQuestUpdates", __FUNCTION__, __LINE__);
 		ProcessQuestUpdates();
@@ -3108,13 +3116,14 @@ void Client::Zone(ZoneServer* new_zone, bool set_coords){
 
 	LogWrite(CCLIENT__DEBUG, 0, "Client", "%s: Removing player from fighting...", __FUNCTION__);
 	//GetCurrentZone()->GetCombat()->RemoveHate(player);
+	
+	database.SavePlayerActiveSpells(this);
 
 	// Remove players pet from zone if there is one
 	player->DismissPet((NPC*)player->GetPet());
 	player->DismissPet((NPC*)player->GetCharmedPet());
 	player->DismissPet((NPC*)player->GetDeityPet());
 	player->DismissPet((NPC*)player->GetCosmeticPet());
-
 
 	LogWrite(CCLIENT__DEBUG, 0, "Client", "%s: Removing player from current zone...", __FUNCTION__);
 	GetCurrentZone()->RemoveSpawn(player, false);

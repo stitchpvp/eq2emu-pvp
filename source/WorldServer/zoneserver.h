@@ -289,6 +289,8 @@ public:
 	void	UpdateVitality(float amount);
 	
 	vector<Entity*> GetPlayers();
+
+	Player * GetPlayerByID(int32 id);
 	
 	void	KillSpawn(Spawn* dead, Spawn* killer, bool send_packet = true, int8 damage_type = 0, int16 kill_blow_type = 0);
 	

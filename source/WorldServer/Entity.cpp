@@ -901,6 +901,7 @@ void Entity::AddSpellBonus(LuaSpell* spell, int16 type, sint32 value, int64 clas
 	//CheckSpellBonusRemoval(spell, type);
 	BonusValues* bonus = new BonusValues;
 	bonus->luaspell = spell;
+	bonus->spell_id = spell->spell->GetSpellID();
 	bonus->type = type;
 	bonus->value = value;
 	bonus->class_req = class_req;
@@ -975,8 +976,9 @@ void Entity::CalculateSpellBonuses(ItemStatsValues* stats){
 			}
 			//We've found the highest tier for this spell id, so add the bonuses
 			vector<BonusValues*>* final_bonuses = &sort_itr->second[key];
-			for (int8 i = 0; i < final_bonuses->size(); i++)
+			for (int8 i = 0; i < final_bonuses->size(); i++) {
 				world.AddBonuses(stats, final_bonuses->at(i)->type, final_bonuses->at(i)->value, this);
+			}
 		}
 	}
 }

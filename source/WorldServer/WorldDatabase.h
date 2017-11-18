@@ -122,6 +122,7 @@ public:
 	void	DeleteCharacterSkill(int32 char_id, Skill* skill);
 	void	DeleteCharacterSpell(int32 character_id, int32 spell_id);
 	int32	LoadCharacterSpells(int32 char_id, Player* player);
+	void SavePlayerActiveSpells(Client * client);
 	void	SaveQuickBar(int32 char_id, vector<QuickBarItem*>* quickbar_items);
 	void	SavePlayerSpells(Client* client);
 	int32	LoadSkills();
@@ -154,6 +155,7 @@ public:
 	void	LoadBuyBacks(Client* client);
 	void	SaveBuyBacks(Client* client);
 	void	SaveBuyBack(int32 char_id, int32 item_id, int8 quantity, int32 price);
+	void	LoadCharacterActiveSpells(Player * player);
 	void	DeleteItem(int32 char_id, Item* item, const char* type);
 	void	SaveCharacterColors(int32 char_id, const char* type, EQ2_Color color);
 	void	SaveCharacterFloats(int32 char_id, const char* type, float float1, float float2, float float3);

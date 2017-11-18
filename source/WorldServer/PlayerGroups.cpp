@@ -554,7 +554,7 @@ void PlayerGroupManager::UpdateGroupBuffs() {
 				caster = (*member_itr)->client->GetPlayer();
 			else caster = 0;
 
-			if (!caster)
+			if (!caster || (*member_itr)->client->IsZoning())
 				continue;
 
 			if (!caster->GetMaintainedSpellBySlot(0))

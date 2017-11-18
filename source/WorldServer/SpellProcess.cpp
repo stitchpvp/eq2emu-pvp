@@ -1308,7 +1308,6 @@ bool SpellProcess::CastProcessedSpell(LuaSpell* spell, bool passive) {
 					if (!living_target && target->Alive())
 						living_target = true;
 						
-
 					if (spell->spell->GetSpellData()->success_message.length() > 0) {
 						if (client) {
 							string success_message = spell->spell->GetSpellData()->success_message;

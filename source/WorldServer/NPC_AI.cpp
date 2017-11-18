@@ -99,10 +99,7 @@ void Brain::Think() {
 			}
 			else {
 				// Still within max chase distance lets to the combat stuff now
-
 				float distance = m_body->GetDistance(target);
-				distance -= target->appearance.pos.collision_radius / 10;
-				distance -= m_body->appearance.pos.collision_radius / 10;
 
 				if(!m_body->IsCasting() && (!HasRecovered() || !ProcessSpell(target, distance))) {
 					LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "%s is attempting melee on %s.", m_body->GetName(), target->GetName());
