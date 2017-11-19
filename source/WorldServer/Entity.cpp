@@ -303,9 +303,10 @@ void Entity::ChangePrimaryWeapon(){
 		melee_combat_data.wield_type = item->weapon_info->wield_type;
 	}
 	else{
-		melee_combat_data.primary_weapon_delay = 2000;
-		melee_combat_data.primary_weapon_damage_low = (int32)(1 + GetLevel() * .2);
+		melee_combat_data.primary_weapon_delay = 1500;
 		melee_combat_data.primary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel()/5));
+		melee_combat_data.primary_weapon_damage_low = (int32)(melee_combat_data.primary_weapon_damage_high * 0.5);
+
 		if(IsNPC())
 			melee_combat_data.primary_weapon_type = ((NPC*)this)->GetAttackType();
 		else
@@ -327,9 +328,9 @@ void Entity::ChangeSecondaryWeapon(){
 		melee_combat_data.secondary_weapon_type = item->GetWeaponType();
 	}
 	else{
-		melee_combat_data.secondary_weapon_delay = 2000;
-		melee_combat_data.secondary_weapon_damage_low = (int32)(1 + GetLevel() * .2);
+		melee_combat_data.secondary_weapon_delay = 1500;
 		melee_combat_data.secondary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel()/6));
+		melee_combat_data.secondary_weapon_damage_low = (int32)(melee_combat_data.secondary_weapon_damage_high * 0.5);
 		melee_combat_data.secondary_weapon_type = 1;
 	}
 	if(IsNPC())

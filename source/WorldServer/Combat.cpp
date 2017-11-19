@@ -143,7 +143,7 @@ bool Entity::AttackAllowed(Entity* target, float distance, bool range_attack) {
 		}
 	}
 	else if (distance != 0) {
-		if(distance >= MAX_COMBAT_RANGE) {
+		if(distance > MAX_COMBAT_RANGE) {
 			LogWrite(COMBAT__DEBUG, 3, "AttackAllowed", "Failed to attack: distance is beyond melee range");
 			return false;
 		}
