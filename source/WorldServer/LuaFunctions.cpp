@@ -1121,8 +1121,6 @@ int EQ2Emu_lua_SpellDamage(lua_State* state){
 	if(caster && caster->IsEntity()){		
 		if (target) {
 			float distance = caster->GetDistance(target, true);
-			distance -= caster->appearance.pos.collision_radius/10;
-			distance -= target->appearance.pos.collision_radius/10;
 			static_cast<Entity*>(caster)->SpellAttack(target, distance, luaspell, type, min_damage, max_damage, crit_mod, no_calcs);
 		}
 	}

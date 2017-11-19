@@ -701,8 +701,8 @@ EQ2Packet* PlayerInfo::serialize(int16 version){
 		packet->setDataByName("unknown11", -1, 0);
 		packet->setDataByName("unknown11", -1, 1);
 		packet->setDataByName("mitigation2_cur", 2367);
-		packet->setDataByName("mitigation_pct_pve", player->GetMitigationPercentage() * 1000); // Mitigation % vs PvE
-		packet->setDataByName("mitigation_pct_pvp", player->GetMitigationPercentage() * 1000); // Mitigation % vs PvP
+		packet->setDataByName("mitigation_pct_pve", player->GetMitigationPercentage(player->GetLevel()) * 1000); // Mitigation % vs PvE
+		packet->setDataByName("mitigation_pct_pvp", player->GetMitigationPercentage(player->GetLevel()) * 1000); // Mitigation % vs PvP
 		//packet->setDataByName("avoidance", 169); //Avoidance
 		packet->setDataByName("avoidance_base", 0); //Base Avoidance
 		packet->setDataByName("base_avoidance_pct", info_struct->base_avoidance_pct); //Base Avoidance pct
