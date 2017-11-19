@@ -702,17 +702,8 @@ bool Spawn::TakeDamage(int32 damage){
 	int32 hp = GetHP();
 	if(damage >= hp) {
 		SetHP(0);
-		if (IsPlayer()) {
-			((Player*)this)->InCombat(false);
-			((Player*)this)->SetRangeAttack(false);	
-			GetZone()->TriggerCharSheetTimer(); // force char sheet updates now
-		}
-	}
-	else {
+	} else {
 		SetHP(hp - damage);
-		// if player flag the char sheet as changed so the ui updates properly
-		if (IsPlayer())
-			((Player*)this)->SetCharSheetChanged(true);
 	}
 	return true;
 }
@@ -1490,10 +1481,13 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 		packet->setDataByName("action_state", GetTempActionState());
 	else
 		packet->setDataByName("action_state", appearance.action_state);
-	if(GetTempVisualState() >= 0)
-		packet->setDataByName("visual_state", GetTempVisualState());
-	else
+
+	if (GetTempVisualState() >= 0) {
+		if (this != spawn || (GetTempVisualState() != 290 && GetTempVisualState() != 11757 && GetTempVisualState() != 11758))
+			packet->setDataByName("visual_state", GetTempVisualState());
+	} else {
 		packet->setDataByName("visual_state", appearance.visual_state);
+	}
 	packet->setDataByName("emote_state", appearance.emote_state);
 	packet->setDataByName("mood_state", appearance.mood_state);
 	packet->setDataByName("gender", appearance.gender);

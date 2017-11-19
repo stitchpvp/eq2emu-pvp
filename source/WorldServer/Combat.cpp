@@ -964,9 +964,6 @@ void Entity::KillSpawn(Spawn* dead, int8 damage_type, int16 kill_blow_type) {
 
 	if (IsPlayer() && dead->IsEntity())
 		GetZone()->GetSpellProcess()->KillHOBySpawnID(dead->GetID());
-
-	//if (dead->IsEntity())								same code called in zone server
-		//((Entity*)dead)->InCombat(false);
 	
 	if (dead->IsPet())
 		((NPC*)dead)->GetOwner()->DismissPet((NPC*)dead, true);
@@ -1049,59 +1046,47 @@ void Player::ProcessCombat() {
 	if(!combat_target)
 		return;
 
-	float distance = 0;
-	distance = GetDistance(combat_target);
-	//distance -= combat_target->appearance.pos.collision_radius / 10;
-	//distance -= appearance.pos.collision_radius / 10;
+	float distance = GetDistance(combat_target);
 
 	// Check to see if we are doing ranged auto attacks if not check to see if we are in melee range
-	if (GetRangeAttack()) {
-		// We are doing ranged auto attacks
-		
-		//check to see if we can attack the target AND the ranged weapon is ready
-		if(AttackAllowed((Entity*)combat_target, distance, true) && RangeWeaponReady()) {
-			Item* weapon = 0;
-			Item* ammo = 0;
-			// Get the currently equiped weapon and ammo for the ranged attack
-			weapon = GetEquipmentList()->GetItem(EQ2_RANGE_SLOT);
-			ammo = GetEquipmentList()->GetItem(EQ2_AMMO_SLOT);
-			LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon '%s', Ammo '%s'", ( weapon )? weapon->name.c_str() : "None", ( ammo ) ? ammo->name.c_str() : "None");
+	if (GetRangeAttack() && AttackAllowed((Entity*)combat_target, distance, true) && RangeWeaponReady()) {
+		Item* weapon = 0;
+		Item* ammo = 0;
+		// Get the currently equiped weapon and ammo for the ranged attack
+		weapon = GetEquipmentList()->GetItem(EQ2_RANGE_SLOT);
+		ammo = GetEquipmentList()->GetItem(EQ2_AMMO_SLOT);
+		LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon '%s', Ammo '%s'", ( weapon )? weapon->name.c_str() : "None", ( ammo ) ? ammo->name.c_str() : "None");
 
-			// If weapon and ammo are both valid perform the ranged attack else send a message to the client
-			if(weapon && ammo) {
-				LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon: Primary, Fighter: '%s', Target: '%s', Distance: %.2f", GetName(), combat_target->GetName(), distance);
-				RangeAttack(combat_target, distance, weapon, ammo);
-			}
-			else {
-				Client* client = GetZone()->GetClientBySpawn(this);
-				if (client) {
-					// Need to get messages from live, made these up so the player knows what is wrong in game if weapon or ammo are not valid
-					if (!ammo)
-						client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Out of ammo.");
-					if (!weapon)
-						client->SimpleMessage(CHANNEL_COLOR_YELLOW, "No ranged weapon found.");
+		// If weapon and ammo are both valid perform the ranged attack else send a message to the client
+		if(weapon && ammo) {
+			LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon: Primary, Fighter: '%s', Target: '%s', Distance: %.2f", GetName(), combat_target->GetName(), distance);
+			RangeAttack(combat_target, distance, weapon, ammo);
+		}
+		else {
+			Client* client = GetZone()->GetClientBySpawn(this);
+			if (client) {
+				// Need to get messages from live, made these up so the player knows what is wrong in game if weapon or ammo are not valid
+				if (!ammo)
+					client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Out of ammo.");
+				if (!weapon)
+					client->SimpleMessage(CHANNEL_COLOR_YELLOW, "No ranged weapon found.");
 					
-				}
 			}
 		}
 	}
-	else if(distance <= MAX_COMBAT_RANGE) {
-		// We are doing melee auto attacks and are within range
+	else if (GetMeleeAttack() && AttackAllowed((Entity*)combat_target)) {
+		// Check to see if the primary melee weapon is ready
+		if(PrimaryWeaponReady()) {
+			// Set the time of the last melee attack with the primary weapon and perform the melee attack with primary weapon
+			SetPrimaryLastAttackTime(Timer::GetCurrentTime2());
+			MeleeAttack(combat_target, distance, true);
+		}
 
-		// Check to see if we can attack the target
-		if(AttackAllowed((Entity*)combat_target)) {
-			// Check to see if the primary melee weapon is ready
-			if(PrimaryWeaponReady()) {
-				// Set the time of the last melee attack with the primary weapon and perform the melee attack with primary weapon
-				SetPrimaryLastAttackTime(Timer::GetCurrentTime2());
-				MeleeAttack(combat_target, distance, true);
-			}
-			// Check to see if the secondary weapon is ready
-			if(SecondaryWeaponReady()) {
-				// set the time of the last melee attack with the secondary weapon and perform the melee attack with the secondary weapon
-				SetSecondaryLastAttackTime(Timer::GetCurrentTime2());
-				MeleeAttack(combat_target, distance, false);
-			}
+		// Check to see if the secondary weapon is ready
+		if(SecondaryWeaponReady()) {
+			// set the time of the last melee attack with the secondary weapon and perform the melee attack with the secondary weapon
+			SetSecondaryLastAttackTime(Timer::GetCurrentTime2());
+			MeleeAttack(combat_target, distance, false);
 		}
 	}
 }

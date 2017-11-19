@@ -2510,49 +2510,49 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 		case COMMAND_AUTO_ATTACK:{
 			int8 type = 1;
 			Player* player = client->GetPlayer();
+
 			if(!player)
 				break;
-			bool incombat = player->EngagedInCombat();
-			if(sep && sep->arg[0] && sep->IsNumber(0))
-				type = atoi(sep->arg[0]);
-			if(client->GetPlayer()->GetHP() == 0){
-				client->SimpleMessage(CHANNEL_COLOR_RED,"You cannot do that right now.");
+
+			if (client->GetPlayer()->GetHP() == 0) {
+				client->SimpleMessage(CHANNEL_COLOR_RED, "You cannot do that right now.");
 				break;
 			}
-			if(type == 0){
-				if(incombat)
+
+			bool in_combat = player->EngagedInCombat();
+			if(sep && sep->arg[0] && sep->IsNumber(0))
+				type = atoi(sep->arg[0]);
+
+			switch (type) {
+			case 0:
+				if (in_combat)
 					client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You stop fighting.");
+
 				player->InCombat(false);
-				player->InCombat(false, true);
 				player->SetRangeAttack(false);
+				player->SetMeleeAttack(false);
+
+				break;
+
+			case 1:
+				if (!in_combat)
+					client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You start fighting.");
+				player->InCombat(true);
+				player->SetMeleeAttack(true);
+				player->SetRangeAttack(false);
+
+				break;
+
+			case 2:
+				player->InCombat(true);
+				player->SetMeleeAttack(false);
+				player->SetRangeAttack(true);
+
+				break;
 			}
-			else {
-				if(type == 2){
-					player->InCombat(false);
-					if(incombat && player->GetRangeAttack()){
-						player->SetRangeAttack(false);
-						player->InCombat(false, true);
-						client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You stop fighting.");
-					}
-					else{
-						player->SetRangeAttack(true);
-						player->InCombat(true, true);
-						client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You start fighting.");
-					}
-				}
-				else {
-					player->InCombat(false, true);
-					player->SetRangeAttack(false);
-					player->InCombat(true);
-					if(!incombat)
-						client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You start fighting.");
-				}
-				/*else
-					client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You cannot attack that!");*/
-			}
-			player->SetCharSheetChanged(true);
+
 			break;
-								}
+		}
 		case COMMAND_DEPOP:{
 			bool allow_respawns = false;
 			if(sep && sep->arg[0] && sep->IsNumber(0)){
@@ -3709,7 +3709,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 		case COMMAND_EDITOR				: { Command_Editor(client, sep); break; }
 		case COMMAND_ACCEPT_RESURRECTION: { Command_AcceptResurrection(client, sep); break; }
 		case COMMAND_DECLINE_RESURRECTION:{ Command_DeclineResurrection(client, sep); break; }
-		case COMMAND_TEST				: { Command_Test(client, command_parms); break; }
+		case COMMAND_TEST				: { Command_Test(client, sep); break; }
 		case COMMAND_SPEED				: { Command_Speed(client, sep); break; }
 		case COMMAND_SERVER_FLAG        : { Command_ServerFlag(client, sep); break; }
 		case COMMAND_PVP_RANGE			: { Command_PVPRange(client); break; }
@@ -7432,46 +7432,16 @@ void Commands::Command_TellChannel(Client *client, Seperator *sep) {
 	chat.TellChannel(client, sep->arg[0], sep->argplus[1]);
 }
 
-void Commands::Command_Test(Client* client, EQ2_16BitString* command_parms) {
+void Commands::Command_Test(Client* client, Seperator* sep) {
+	bool val = false;
 
-	/*if (client->GetPlayer()->GetTarget()) {
-		int spawn_id = client->GetPlayer()->GetIDWithPlayerSpawn(client->GetPlayer()->GetTarget());
+	if (atol(sep->arg[0]) == 1) {
+		client->GetPlayer()->set_character_flag(CF_IN_PVP);
+	} else {
+		client->GetPlayer()->reset_character_flag(CF_IN_PVP);
+	}
 
-		PacketStruct* packet = configReader.getStruct("WS_SetControlGhost", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", 0xFFFFFFFF);
-			packet->setDataByName("unknown2", 255);
-			client->QueuePacket(packet->serialize());
-			safe_delete(packet);
-		}
-
-		packet = configReader.getStruct("WS_SetPOVGhostCmd", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", 0xFFFFFFFF);
-			client->QueuePacket(packet->serialize());
-			safe_delete(packet);
-		}
-
-		packet = configReader.getStruct("WS_SetPOVGhostCmd", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", spawn_id);
-			EQ2Packet* app_pov = packet->serialize();
-			client->QueuePacket(app_pov);
-			safe_delete(packet);
-		}
-
-		packet = configReader.getStruct("WS_SetControlGhost", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", spawn_id);
-			packet->setDataByName("size", 0.56);
-			packet->setDataByName("unknown2", 255);
-			EQ2Packet* app = packet->serialize();
-			client->QueuePacket(app);
-			safe_delete(packet);
-		}
-	}*/
-
-	ClientPacketFunctions::SendCharacterSheet(client);
+	//client->GetPlayer()->InCombat(val);
 }
 
 void Commands::Command_LeaveChannel(Client *client, Seperator *sep) {

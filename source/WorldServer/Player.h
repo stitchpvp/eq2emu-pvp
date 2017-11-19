@@ -520,7 +520,7 @@ public:
 	bool	DoubleXPEnabled();
 	float	CalculateXP(Spawn* victim);
 	float	CalculateTSXP(int8 level);
-	void	InCombat(bool val, bool range = false);
+	void	InCombat(bool val);
 	void	PrepareIncomingMovementPacket(int32 len, uchar* data, int16 version);
 	uchar*	GetMovementPacketData(){
 		return movement_packet;
@@ -643,6 +643,8 @@ public:
 	void				SetAwayMessage(string val) { away_message = val; }
 	void				SetRangeAttack(bool val);
 	bool				GetRangeAttack();
+	void				SetMeleeAttack(bool val);
+	bool				GetMeleeAttack();
 	ZoneServer*			GetGroupMemberInZone(int32 zone_id);
 	bool				AddMail(Mail* mail);
 	MutexMap<int32, Mail*>*	GetMail();
@@ -809,6 +811,7 @@ public:
 
 private:
 	bool range_attack;
+	bool melee_attack;
 	int16 last_movement_activity;
 	bool returning_from_ld;
 	PlayerGroup* group;

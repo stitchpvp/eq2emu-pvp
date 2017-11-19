@@ -4015,15 +4015,9 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 		}
 
 		if (killer && killer->IsPlayer()) {
-			client = GetClientBySpawn(killer);
-
 			((Player*)killer)->InCombat(false);
-
-			PacketStruct* packet = configReader.getStruct("WS_EnterCombat", client->GetVersion());
-			if (packet) {
-				client->QueuePacket(packet->serialize());
-			}
-			safe_delete(packet);
+			((Player*)killer)->SetRangeAttack(false);
+			((Player*)killer)->SetMeleeAttack(false);
 
 			if (dead->IsPlayer() && PVP::IsEnabled()) {
 				Player* dead_player = static_cast<Player*>(dead);
@@ -4035,35 +4029,35 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 				if (ranking_difference >= 1 && ranking_difference <= 2) {
 					dead_player->SetFame(dead_player->GetFame() - 10);
 					killer_player->SetFame(killer_player->GetFame() + 10);
-					dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your death has decreased your fame.");
-					killer_player->GetZone()->GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your victory has increased your fame.");
+					GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your death has decreased your fame.");
+					GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your victory has increased your fame.");
 				} else if (ranking_difference <= 0 && ranking_difference >= -2) {
 					dead_player->SetFame(dead_player->GetFame() - 5);
 					killer_player->SetFame(killer_player->GetFame() + 5);
-					dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your death has decreased your fame.");
-					killer_player->GetZone()->GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your victory has increased your fame.");
+					GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your death has decreased your fame.");
+					GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your victory has increased your fame.");
 				}
 
 				if (dead_rank != PVP::GetRankIndex(dead_player)) {
 					int rank = PVP::GetRankIndex(dead_player);
 					if (rank == 0) {
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are no longer ranked.");
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SendPopupMessage(10, "Your are no longer ranked.", "", 2, 0xFF, 0xFF, 0xFF);
+						GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are no longer ranked.");
+						GetClientBySpawn(dead_player)->SendPopupMessage(10, "Your are no longer ranked.", "", 2, 0xFF, 0xFF, 0xFF);
 					} else if (rank < dead_rank) {
 						char message[37];
 						sprintf(message, "Your rank has dropped to %s.", PVP::GetRank(dead_player).c_str());
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, message);
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SendPopupMessage(10, message, "", 2, 0xFF, 0xFF, 0xFF);
+						GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, message);
+						GetClientBySpawn(dead_player)->SendPopupMessage(10, message, "", 2, 0xFF, 0xFF, 0xFF);
 					}
-					dead_player->GetZone()->GetClientBySpawn(dead_player)->SendTitleUpdate();
+					GetClientBySpawn(dead_player)->SendTitleUpdate();
 				}
 
 				if (PVP::GetRankIndex(killer_player) > killer_rank) {
 					char message[42];
 					sprintf(message, "You have obtained the rank of %s.", PVP::GetRank(killer_player).c_str());
-					killer_player->GetZone()->GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, message);
-					client->SendPopupMessage(10, message, "", 2, 0xFF, 0xFF, 0xFF);
-					client->SendTitleUpdate();
+					GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, message);
+					GetClientBySpawn(killer_player)->SendPopupMessage(10, message, "", 2, 0xFF, 0xFF, 0xFF);
+					GetClientBySpawn(killer_player)->SendTitleUpdate();
 				}
 
 				dead_player->UpdatePlayerStatistic(STAT_PLAYER_TOTAL_PVP_DEATHS, 1);
@@ -4071,7 +4065,14 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 			}
 		}
 
-		((Entity*)dead)->InCombat(false);
+		if (dead->IsPlayer()) {
+			((Player*)dead)->InCombat(false);
+			((Player*)dead)->SetRangeAttack(false);
+			((Player*)dead)->SetMeleeAttack(false);
+		} else {
+			((Entity*)dead)->InCombat(false);
+		}
+
 		dead->SetInitialState(16512, false); // This will make aerial npc's fall after death
 		dead->SetHP(0);
 		dead->SetSpawnType(3);

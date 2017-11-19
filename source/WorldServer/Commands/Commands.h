@@ -395,7 +395,7 @@ public:
 	void Command_StationMarketPlace(Client* client, Seperator* sep);
 	void Command_StopEating(Client* client);
 	void Command_StopDrinking(Client* client);
-	void Command_Test(Client* client, EQ2_16BitString* command_parms);
+	void Command_Test(Client* client, Seperator* sep);
 	void Command_Title(Client* client);
 	void Command_TitleList(Client* client);
 	void Command_TitleSetPrefix(Client* client, Seperator* sep);

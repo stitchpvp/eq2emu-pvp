@@ -56,6 +56,7 @@ Player::Player(){
 	//speed = 0;
 	packet_num = 0;
 	range_attack = false;
+	melee_attack = false;
 	old_movement_packet = 0;
 	charsheet_changed = false;
 	quickbar_updated = false;
@@ -2447,21 +2448,19 @@ void Player::PrepareIncomingMovementPacket(int32 len,uchar* data,int16 version)
 		if((activity == UPDATE_ACTIVITY_DROWNING || activity == UPDATE_ACTIVITY_DROWNING2) && GetZone() && !GetInvulnerable()) //drowning
 			GetZone()->AddDrowningVictim(this);
 
-		last_movement_activity = activity;
-	}
-
-	if (activity == UPDATE_ACTIVITY_JUMPING) {
-		if (y_speed < 0 && GetTempVisualState() != 290) {
+		if (activity == UPDATE_ACTIVITY_JUMPING) {
+			if (x_speed != 0 || z_speed != 0) {
+				SetTempVisualState(11758);
+			} else {
+				SetTempVisualState(11757);
+			}
+		} else if (activity == UPDATE_ACTIVITY_FALLING) {
 			SetTempVisualState(290);
-		} else if (GetTempVisualState() != 11758 && (x_speed != 0 || y_speed != 0)) {
-			SetTempVisualState(11758);
-		} else if (GetTempVisualState() != 11757) {
-			SetTempVisualState(11757);
+		} else if (GetTempVisualState() != -1) {
+			SetTempVisualState(-1);
 		}
-	} else if (activity == UPDATE_ACTIVITY_FALLING && GetTempVisualState() != 290) {
-		SetTempVisualState(290);
-	} else if (GetTempVisualState() != 0) {
-		SetTempVisualState(0);
+
+		last_movement_activity = activity;
 	}
 
 	//Player is riding a lift, update lift XYZ offsets and the lift's spawn pointer
@@ -2616,20 +2615,16 @@ PlayerSkillList* Player::GetSkills(){
 	return &skill_list;
 }
 
-void Player::InCombat(bool val, bool range) {
-	if (val)
-		GetInfoStruct()->flags |= (1 << (range?CF_RANGED_AUTO_ATTACK:CF_AUTO_ATTACK));
-	else
-		GetInfoStruct()->flags &= ~(1 << (range?CF_RANGED_AUTO_ATTACK:CF_AUTO_ATTACK));
-
+void Player::InCombat(bool val) {
 	in_combat = val;
+
 	if (in_combat) {
 		AddIconValue(64);
 	} else {
 		RemoveIconValue(64);
 	}
 
-	charsheet_changed = true;
+	SetCharSheetChanged(true);
 }
 
 void Player::SetCharSheetChanged(bool val){
@@ -4156,10 +4151,28 @@ Skill* Player::GetSkillByName(const char* name, bool check_update){
 
 void Player::SetRangeAttack(bool val){
 	range_attack = val;
+
+	if (val)
+		set_character_flag(CF_RANGED_AUTO_ATTACK);
+	else
+		reset_character_flag(CF_RANGED_AUTO_ATTACK);
 }
 
-bool Player::GetRangeAttack(){
+bool Player::GetRangeAttack() {
 	return range_attack;
+}
+
+void Player::SetMeleeAttack(bool val) {
+	melee_attack = val;
+
+	if (val)
+		set_character_flag(CF_AUTO_ATTACK);
+	else
+		reset_character_flag(CF_AUTO_ATTACK);
+}
+
+bool Player::GetMeleeAttack() {
+	return melee_attack;
 }
 
 bool Player::AddMail(Mail* mail) {
