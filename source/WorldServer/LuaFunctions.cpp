@@ -828,8 +828,6 @@ int EQ2Emu_lua_SpellHeal(lua_State* state){
 
       if (target) {
          float distance = caster->GetDistance(target, true);
-         distance -= caster->appearance.pos.collision_radius/10;
-         distance -= target->appearance.pos.collision_radius/10;
          if (static_cast<Entity*>(caster)->SpellHeal(target, distance, luaspell, heal_type, min_heal, max_heal, crit_mod, no_calcs))
             success = true;
       }

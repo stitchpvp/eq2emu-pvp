@@ -794,7 +794,7 @@ public:
 	void SetGroupMemberInfo(GroupMemberInfo* info) { group_member_info = info; }
 	void UpdateGroupMemberInfo();
 
-	float GetMitigationPercentage(int enemy_level) { return info_struct.cur_mitigation / ((110.0 * enemy_level) + info_struct.cur_mitigation); }
+	float GetMitigationPercentage(int enemy_level) { return info_struct.cur_mitigation / ((40 * enemy_level) + info_struct.cur_mitigation + 200.0); }
 
 protected:
 	bool	in_combat;

@@ -459,8 +459,6 @@ void CombatPetBrain::Think() {
 
 	// Get distance from the owner
 	float distance = GetBody()->GetDistance(target);
-	distance -= target->appearance.pos.collision_radius / 10;
-	distance -= GetBody()->appearance.pos.collision_radius / 10;
 
 	// If out of melee range then move closer
 	if (distance > MAX_COMBAT_RANGE)
@@ -493,8 +491,6 @@ void NonCombatPetBrain::Think() {
 
 	// Get distance from the owner
 	float distance = GetBody()->GetDistance(target);
-	distance -= target->appearance.pos.collision_radius / 10;
-	distance -= GetBody()->appearance.pos.collision_radius / 10;
 
 	// If out of melee range then move closer
 	if (distance > MAX_COMBAT_RANGE)
@@ -571,8 +567,6 @@ void DumbFirePetBrain::Think() {
 			}
 
 			float distance = GetBody()->GetDistance(target);
-			distance -= target->appearance.pos.collision_radius / 10;
-			distance -= GetBody()->appearance.pos.collision_radius / 10;
 
 			if(!GetBody()->IsCasting() && (!HasRecovered() || !ProcessSpell(target, distance))) {
 				LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "%s is attempting melee on %s.", GetBody()->GetName(), target->GetName());
