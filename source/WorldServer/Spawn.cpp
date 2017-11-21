@@ -1805,7 +1805,7 @@ void Spawn::ProcessMovement(){
 				SetSpeed(speed);
 			}
 			MovementLocation* loc = GetCurrentRunningLocation();
-			if (GetDistance(followTarget, true) <= MAX_COMBAT_RANGE || (loc && loc->x == GetX() && loc->y == GetY() && loc->z == GetZ())) {
+			if (GetDistance(followTarget) <= MAX_COMBAT_RANGE || (loc && loc->x == GetX() && loc->y == GetY() && loc->z == GetZ())) {
 				ClearRunningLocations();
 				CalculateRunningLocation(true);
 			}

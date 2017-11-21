@@ -566,47 +566,29 @@ void Entity::AddSpellEffect(LuaSpell* luaspell){
 }
 
 void Entity::RemoveMaintainedSpell(LuaSpell* luaspell){
-	printf("starting\n");
-	fflush(stdout);
 	if (!luaspell)
 		return;
 
 	bool found = false;
-	printf("start lock\n");
-	fflush(stdout);
 	MMaintainedSpells.writelock(__FUNCTION__, __LINE__);
 	for (int i = 0; i<30; i++){
-		printf("loop through maintained: %d\n", i);
-		fflush(stdout);
 		// If we already found the spell then we are bumping all other up one so there are no gaps
 		// This check needs to be first so found can never be true on the first iteration (i = 0)
 		if (found) {
-			printf("doing a bump in: %d\n", i);
-			fflush(stdout);
 			GetInfoStruct()->maintained_effects[i].slot_pos = i - 1;
 			GetInfoStruct()->maintained_effects[i - 1] = GetInfoStruct()->maintained_effects[i];
-			printf("did a bump in: %d\n", i);
-			fflush(stdout);
 
 		}
 		// Compare spells, if we found a match set the found flag
-		printf("doing a comparison in: %d\n", i);
-		fflush(stdout);
 		if (GetInfoStruct()->maintained_effects[i].spell == luaspell)
 			found = true;
 
 	}
 	// if we found the spell in the array then we need to set the last element to empty
-	printf("loop done\n");
-	fflush(stdout);
 	if (found) {
 		memset(&GetInfoStruct()->maintained_effects[29], 0, sizeof(MaintainedEffects));
-		printf("did memset\n");
-		fflush(stdout);
 		GetInfoStruct()->maintained_effects[29].spell_id = 0xFFFFFFFF;
 		GetInfoStruct()->maintained_effects[29].icon = 0xFFFF;
-		printf("did 0xFFFF\n");
-		fflush(stdout);
 	}
 	MMaintainedSpells.releasewritelock(__FUNCTION__, __LINE__);
 }
