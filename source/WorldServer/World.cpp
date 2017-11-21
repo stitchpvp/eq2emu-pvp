@@ -1610,6 +1610,10 @@ void World::AddBonuses(ItemStatsValues* values, int16 type, sint32 value, Entity
 				values->accuracy += value;
 				break;
 			}
+			case ITEM_STAT_ARMORMITIGATIONINCREASE: {
+				values->mitigation_increase += value;
+				break;
+			}
         	/*case ITEM_STAT_OFFENSIVESPEED:{
 				values->offensivespeed += value;
 				break;

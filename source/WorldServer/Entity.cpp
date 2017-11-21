@@ -310,7 +310,7 @@ void Entity::ChangePrimaryWeapon(){
 			melee_combat_data.primary_weapon_type = ((NPC*)this)->GetAttackType();
 
 			if (GetEncounterLevel() > 6) {
-				melee_combat_data.primary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.33;
+				melee_combat_data.primary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.7;
 			} else if (GetEncounterLevel() <= 6) {
 				melee_combat_data.primary_weapon_damage_high *= GetEncounterLevel() / 6.0;
 			}
@@ -318,7 +318,7 @@ void Entity::ChangePrimaryWeapon(){
 			melee_combat_data.primary_weapon_type = 1;
 		}
 
-		melee_combat_data.primary_weapon_damage_low = (int32)(melee_combat_data.primary_weapon_damage_high * 0.70);
+		melee_combat_data.primary_weapon_damage_low = (int32)(melee_combat_data.primary_weapon_damage_high * 0.65);
 		melee_combat_data.wield_type = 2;
 	}
 	if(IsNPC())
@@ -345,13 +345,13 @@ void Entity::ChangeSecondaryWeapon(){
 
 		if (IsNPC()) {
 			if (GetEncounterLevel() > 6) {
-				melee_combat_data.secondary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.33;
+				melee_combat_data.secondary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.7;
 			} else if (GetEncounterLevel() <= 6) {
 				melee_combat_data.secondary_weapon_damage_high *= GetEncounterLevel() / 6.0;
 			}
 		}
 
-		melee_combat_data.secondary_weapon_damage_low = (int32)(melee_combat_data.secondary_weapon_damage_high * 0.70);
+		melee_combat_data.secondary_weapon_damage_low = (int32)(melee_combat_data.secondary_weapon_damage_high * 0.65);
 	}
 	if(IsNPC())
 		melee_combat_data.secondary_weapon_damage_high += (int32)(GetInfoStruct()->str / 10);
@@ -816,6 +816,7 @@ void Entity::CalculateBonuses(){
 	info->divine += values->vs_divine;
 	info->heat += values->vs_heat;
 	info->magic += values->vs_magic;
+	info->cur_mitigation += info->cur_mitigation * (values->mitigation_increase / 100.0);
 	info->cur_mitigation += values->vs_slash;
 	info->cur_mitigation += values->vs_pierce;
 	info->cur_mitigation += values->vs_crush;

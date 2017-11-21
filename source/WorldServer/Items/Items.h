@@ -537,6 +537,7 @@ struct ItemStatsValues {
 	sint16			strikethrough;
 	sint16			accuracy;
 	sint16			offensivespeed;
+	sint16			mitigation_increase;
 };
 struct ItemCore {
 	int32	item_id;
