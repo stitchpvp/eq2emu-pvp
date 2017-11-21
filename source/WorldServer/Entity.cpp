@@ -385,8 +385,10 @@ int8 Entity::GetRangedWeaponType(){
 	return ranged_combat_data.ranged_weapon_type;
 }
 
-bool Entity::IsDualWield(){
-	return melee_combat_data.wield_type == 1;
+bool Entity::IsDualWield() {
+	if (melee_combat_data.wield_type == 1 || melee_combat_data.wield_type == 2)
+		return true;
+	return false;
 }
 
 int8 Entity::GetWieldType(){
