@@ -1387,13 +1387,11 @@ bool SpellProcess::CastProcessedSpell(LuaSpell* spell, bool passive) {
 	if (!passive)
 		SendFinishedCast(spell, client);
 
-	if (!spell->spell->GetSpellData()->friendly_spell && !spell->caster->EngagedInCombat()) {
+	if (!spell->spell->GetSpellData()->friendly_spell) {
 		if (spell->caster->IsPlayer()) {
 			static_cast<Player*>(spell->caster)->InCombat(true);
-			static_cast<Player*>(spell->caster)->SetCharSheetChanged(true);
-
-			if (spell->caster->GetZone()) {
-				spell->caster->GetZone()->TriggerCharSheetTimer();
+			if (!static_cast<Player*>(spell->caster)->GetRangeAttack()) {
+				static_cast<Player*>(spell->caster)->SetMeleeAttack(true);
 			}
 		} else {
 			spell->caster->InCombat(true);
