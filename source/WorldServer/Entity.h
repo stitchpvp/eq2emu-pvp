@@ -814,6 +814,7 @@ private:
 	float	last_z;
 	float	last_heading;
 	bool	casting;
+	bool has_secondary_weapon;
 	InfoStruct		info_struct;
 	CombatData melee_combat_data;
 	CombatData ranged_combat_data;

@@ -67,6 +67,7 @@ Entity::Entity(){
 	m_procList.clear();
 	control_effects.clear();
 	immunities.clear();
+	has_secondary_weapon = false;
 
 	for(int i=0;i<NUM_SPELL_EFFECTS;i++){
 		info_struct.spell_effects[i].spell_id = 0xFFFFFFFF;	
@@ -295,22 +296,29 @@ void Entity::SetSecondaryLastAttackTime(int32 new_time){
 
 void Entity::ChangePrimaryWeapon(){
 	Item* item = equipment_list.GetItem(EQ2_PRIMARY_SLOT);
-	if(item && item->details.item_id > 0 && item->IsWeapon()){
+	if (item && item->details.item_id > 0 && item->IsWeapon()) {
 		melee_combat_data.primary_weapon_delay = item->weapon_info->delay * 100;
 		melee_combat_data.primary_weapon_damage_low = item->weapon_info->damage_low3;
 		melee_combat_data.primary_weapon_damage_high = item->weapon_info->damage_high3;
 		melee_combat_data.primary_weapon_type = item->GetWeaponType();
 		melee_combat_data.wield_type = item->weapon_info->wield_type;
-	}
-	else{
+	} else {
 		melee_combat_data.primary_weapon_delay = 1500;
 		melee_combat_data.primary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel()/2.5));
-		melee_combat_data.primary_weapon_damage_low = (int32)(melee_combat_data.primary_weapon_damage_high * 0.5);
 
-		if(IsNPC())
+		if (IsNPC()) {
 			melee_combat_data.primary_weapon_type = ((NPC*)this)->GetAttackType();
-		else
+
+			if (GetEncounterLevel() > 6) {
+				melee_combat_data.primary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.33;
+			} else if (GetEncounterLevel() <= 6) {
+				melee_combat_data.primary_weapon_damage_high *= GetEncounterLevel() / 6.0;
+			}
+		} else {
 			melee_combat_data.primary_weapon_type = 1;
+		}
+
+		melee_combat_data.primary_weapon_damage_low = (int32)(melee_combat_data.primary_weapon_damage_high * 0.70);
 		melee_combat_data.wield_type = 2;
 	}
 	if(IsNPC())
@@ -326,12 +334,24 @@ void Entity::ChangeSecondaryWeapon(){
 		melee_combat_data.secondary_weapon_damage_low = item->weapon_info->damage_low3;
 		melee_combat_data.secondary_weapon_damage_high = item->weapon_info->damage_high3;
 		melee_combat_data.secondary_weapon_type = item->GetWeaponType();
+		has_secondary_weapon = true;
 	}
 	else{
+		has_secondary_weapon = false;
+
 		melee_combat_data.secondary_weapon_delay = 1500;
 		melee_combat_data.secondary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel()/3));
-		melee_combat_data.secondary_weapon_damage_low = (int32)(melee_combat_data.secondary_weapon_damage_high * 0.5);
 		melee_combat_data.secondary_weapon_type = 1;
+
+		if (IsNPC()) {
+			if (GetEncounterLevel() > 6) {
+				melee_combat_data.secondary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.33;
+			} else if (GetEncounterLevel() <= 6) {
+				melee_combat_data.secondary_weapon_damage_high *= GetEncounterLevel() / 6.0;
+			}
+		}
+
+		melee_combat_data.secondary_weapon_damage_low = (int32)(melee_combat_data.secondary_weapon_damage_high * 0.70);
 	}
 	if(IsNPC())
 		melee_combat_data.secondary_weapon_damage_high += (int32)(GetInfoStruct()->str / 10);
@@ -386,7 +406,7 @@ int8 Entity::GetRangedWeaponType(){
 }
 
 bool Entity::IsDualWield() {
-	if (melee_combat_data.wield_type == 1 || melee_combat_data.wield_type == 2)
+	if (has_secondary_weapon && (melee_combat_data.wield_type == 1 || melee_combat_data.wield_type == 2))
 		return true;
 	return false;
 }
