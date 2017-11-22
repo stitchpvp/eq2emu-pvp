@@ -1074,7 +1074,7 @@ void Player::ProcessCombat() {
 			}
 		}
 	}
-	else if (GetMeleeAttack() && AttackAllowed((Entity*)combat_target)) {
+	else if (GetMeleeAttack() && AttackAllowed((Entity*)combat_target), distance) {
 		// Check to see if the primary melee weapon is ready
 		if(PrimaryWeaponReady()) {
 			// Set the time of the last melee attack with the primary weapon and perform the melee attack with primary weapon

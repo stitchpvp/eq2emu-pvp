@@ -3642,9 +3642,14 @@ int EQ2Emu_lua_SummonPet(lua_State* state) {
 
 	// Get a random pet name
 	string random_pet_name;
-	int16 rand_index = MakeRandomInt(0, spawn->GetZone()->pet_names.size() - 1);
-	random_pet_name = spawn->GetZone()->pet_names.at(rand_index);
-	LogWrite(PET__DEBUG, 0, "Pets", "Randomize Pet Name: '%s' (rand: %i)", random_pet_name.c_str(), rand_index);
+
+	if (spawn->IsPlayer()) {
+		random_pet_name = string(spawn->GetName());
+	} else {
+		int16 rand_index = MakeRandomInt(0, spawn->GetZone()->pet_names.size() - 1);
+		random_pet_name = spawn->GetZone()->pet_names.at(rand_index);
+		LogWrite(PET__DEBUG, 0, "Pets", "Randomize Pet Name: '%s' (rand: %i)", random_pet_name.c_str(), rand_index);
+	}
 
 	// If player set various values for the char sheet (pet window)
 	if (spawn->IsPlayer()) {
