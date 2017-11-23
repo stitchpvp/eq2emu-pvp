@@ -200,7 +200,7 @@ Entity* Brain::GetMostHated() {
 		// Loop through the list looking for the entity that this NPC hates the most
 		for(itr = m_hatelist.begin(); itr != m_hatelist.end(); itr++) {
 			// Compare the hate value for the current iteration to our stored highest value
-			if(itr->second > hate) {
+			if(!hate || itr->second > hate) {
 				// New high value store the entity
 				ret = itr->first;
 				// Store the value to compare with the rest of the entities
