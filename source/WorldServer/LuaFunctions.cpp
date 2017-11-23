@@ -3196,7 +3196,7 @@ int EQ2Emu_lua_AddSpellBookEntry(lua_State* state) {
 	if(!lua_interface)
 		return 0;
 	Spawn* player = lua_interface->GetSpawn(state);
-	int16 spellid = lua_interface->GetInt16Value(state, 2);
+	int32 spellid = lua_interface->GetInt32Value(state, 2);
 	int16 tier = lua_interface->GetInt16Value(state, 3);
 	Spell* spell = master_spell_list.GetSpell(spellid, tier);
 	if (player && spell && player->IsPlayer()) {

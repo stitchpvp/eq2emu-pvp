@@ -108,6 +108,7 @@ extern MasterRaceTypeList race_types_list;
 extern MasterSpellList master_spell_list;		// temp - remove later
 extern MasterSkillList master_skill_list;
 
+
 int32 MinInstanceID = 1000;
 
 // JA: Moved most default values to Rules and risky initializers to ZoneServer::Init() - 2012.12.07
@@ -2289,37 +2290,69 @@ void ZoneServer::AddLoot(NPC* npc){
 		vector<LootDrop*>::iterator loot_drop_itr;
 		LootTable* table = 0;
 		vector<int32>::iterator loot_list_itr;
-		float chance = 0;
+		float chancecoin = 0;
+		float chancetable = 0;
+		float chancedrop = 0;
+		float chancetally = 0;
+		float droptally = 0;
+		// the following loop,loops through each table
 		for(loot_list_itr = loot_tables.begin(); loot_list_itr != loot_tables.end(); loot_list_itr++){
 			table = GetLootTable(*loot_list_itr);
 			if(table && table->maxcoin > 0){
-				chance = rand()%100;
-				if(table->coin_probability >= chance){
+				chancecoin = rand()%100;
+				if(table->coin_probability >= chancecoin){
 					if(table->maxcoin > table->mincoin)
 						npc->AddLootCoins(table->mincoin + rand()%(table->maxcoin - table->mincoin));
 				}
 			}
-			chance = rand()%100;
-			if(table && (table->lootdrop_probability < 100 || table->lootdrop_probability >= chance)){
+			int numberchances = 1;
+
+			//if (table->lootdrop_probability == 100){			}
+		//else
+			//chancetally += table->lootdrop_probability;
+			int maxchance = table->maxlootitems;
+			for ( numberchances; numberchances <= maxchance; numberchances++) {
+				chancetable = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 100));
+				//LogWrite(PLAYER__DEBUG, 0, "Player", "Table Chance: '%f'", chancetable);
+				float droppercenttotal = 0;
+			//--------------------------------------------------------------------------------------------------------------------------------------------------------------
+				if (table && (table->lootdrop_probability == 100 || (table->lootdrop_probability >= chancetable)) ) {
+
+					//LogWrite(PLAYER__DEBUG, 0, "Player", "Probability:%f  Table Chance: '%f'", table->lootdrop_probability, chancetable);
 				loot_drops = GetLootDrops(*loot_list_itr);
-				if(loot_drops){
+				if (loot_drops){
 					LootDrop* drop = 0;
 					int16 count = 0;
-					for(loot_drop_itr = loot_drops->begin(); loot_drop_itr != loot_drops->end(); loot_drop_itr++){
+					int16 IC = 0;
+					for (loot_drop_itr = loot_drops->begin(); loot_drop_itr != loot_drops->end(); loot_drop_itr++){
 						drop = *loot_drop_itr;
-						chance = rand()%100;
-						if(drop->probability >= chance){
+						droppercenttotal += drop->probability;
+					}
+					int droplistsize = loot_drops->size();
+					float chancedroptally = 0;
+					chancedrop = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 100));
+					for (loot_drop_itr = loot_drops->begin(); loot_drop_itr != loot_drops->end(); loot_drop_itr++){
+						drop = *loot_drop_itr;
+						if (droppercenttotal >= 100)
+							droppercenttotal = 100;
+						chancedroptally += 100 / droppercenttotal * drop->probability;
+						//chancedrop = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 100));
+						//LogWrite(PLAYER__DEBUG, 0, "Player", "Loot drop: '%i'     Chance: %f    Prob tally:  %f  min: %f", drop, chancedrop, chancedroptally, chancedroptally - drop->probability);
+						if ((chancedroptally==100)||((chancedroptally >= chancedrop) && (chancedroptally -(100 / droppercenttotal * drop->probability)) <= chancedrop)){
+
+							//LogWrite(PLAYER__DEBUG, 0, "Player", "Loot drop: '%i'     Chance: %f    Prob:  %f  We have a loot drop winner", drop, chancedrop, chancedroptally);
 							count++;
 							npc->AddLootItem(drop->item_id, drop->item_charges);
-
-							LogWrite(MISC__TODO, 1, "TODO", "Auto-Equip new looted items\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
+							//LogWrite(PLAYER__DEBUG, 0, "Player", "loot Count: '%i'",count);
+							//LogWrite(MISC__TODO, 1, "TODO", "Auto-Equip new looted items\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
 							//if(drop->equip_item) 
 
 						}
-						if(table->maxlootitems > 0 && count >= table->maxlootitems)
+						if (table->maxlootitems > 0 && count >= table->maxlootitems)
 							break;
 					}
 				}
+			}
 			}
 		}
 	}
@@ -2663,6 +2696,8 @@ Sign* ZoneServer::AddSignSpawn(SpawnLocation* spawnlocation, SpawnEntry* spawnen
 		sign->SetExpireTime(spawnentry->expire_time);
 		if (spawnentry->expire_time > 0)
 			AddSpawnExpireTimer(sign, spawnentry->expire_time, spawnentry->expire_offset);
+		
+		
 		AddSpawn(sign);
 	}
 	LogWrite(SPAWN__TRACE, 0, "Spawn", "Exit %s", __FUNCTION__);
@@ -4722,41 +4757,68 @@ EQ2Packet* ZoneServer::GetZoneInfoPacket(Client* client){
 	packet->setSmallStringByName("char_name", client->GetPlayer()->GetName());
 	//packet->setDataByName("unknown1", 1, 1);
 	int32 expansions = EXPANSION_UNKNOWN + EXPANSION_DOF + EXPANSION_KOS + EXPANSION_EOF + EXPANSION_ROK + EXPANSION_TSO + EXPANSION_DOV;
-	packet->setDataByName("expansions_enabled", expansions);
-	
+	//packet->setDataByName("expansions_enabled", 82313211);//expansions 63181 
+	packet->setDataByName("expansions_enabled", 552075103);//expansions 63182 
 	packet->setDataByName("x", client->GetPlayer()->GetX());
 	packet->setDataByName("y", client->GetPlayer()->GetY());
 	packet->setDataByName("z", client->GetPlayer()->GetZ());
-	packet->setDataByName("unknown1", 1, 1);
+	packet->setDataByName("unknown1", 1, 1);//1, 1
 	// unknown3 can prevent screen shots from being taken if
-	packet->setDataByName("unknown3", 2094661567, 1);			// Screenshots allowed with this value
+	//packet->setDataByName("unknown3", 2094661567, 1);			// Screenshots allowed with this value
 	//packet->setDataByName("unknown3", 3815767999, 1);			// Screenshots disabled with this value
-	packet->setDataByName("unknown3", 1, 2);
+	//packet->setDataByName("unknown3", 1, 2);
 
 	if (client->GetVersion() <= 63181){
-		packet->setDataByName("unknown3", 872447025, 0);//63181 
-		packet->setDataByName("unknown3", 3085434875, 1);// 63181 
-		packet->setDataByName("unknown3", 2147483633, 2);// 63181 
+		packet->setDataByName("unknown3", 872447025,0);//63181 
+		packet->setDataByName("unknown3", 3085434875,1);// 63181 
+		packet->setDataByName("unknown3", 2147483633,2);// 63181 
 	}
 	else{
-		packet->setDataByName("unknown3a", 73821356);//63182 
-		packet->setDataByName("unknown3b", 3991404383);// 63182
-		packet->setDataByName("unknown3c", 4278189967);// 63182
+		packet->setDataByName("unknown3a", 750796556);//63182 73821356
+		packet->setDataByName("unknown3b", 3991404383);// 63182 3991404383
+		packet->setDataByName("unknown3c", 4278189967);// 63182 4278189967
 		packet->setDataByName("unknown2a", 8);// 63182
 		packet->setDataByName("unknown2b", 8);// 63182
 	}
-
-	//packet->setDataByName("unknown5", 100798094);
-	packet->setDataByName("unknown5", 50859661);
-	packet->setDataByName("unknown6", 19);
-	packet->setDataByName("unknown6", 58, 1);
-	packet->setDataByName("unknown6", 6, 2);
+	
+	packet->setDataByName("year", world.GetWorldTimeStruct()->year);
+	packet->setDataByName("month", world.GetWorldTimeStruct()->month);
+	packet->setDataByName("day", world.GetWorldTimeStruct()->day);
+	packet->setDataByName("hour", world.GetWorldTimeStruct()->hour);
+	packet->setDataByName("minute", world.GetWorldTimeStruct()->minute);
+	packet->setDataByName("unknown", 0);
 	packet->setDataByName("unknown7", 1);
 	packet->setDataByName("unknown7", 1, 1);
+	
 	packet->setDataByName("unknown9", 13);
-	//packet->setDataByName("unknown10", 25188959);
-	packet->setDataByName("unknown10", 25190239);
-	packet->setDataByName("unknown12", 0xFFFFFFFF);
+	//packet->setDataByName("unknown10", 25188959);4294967295
+	//packet->setDataByName("unknown10", 25190239);
+	packet->setDataByName("unknown10", 25191524);//25191524
+	packet->setDataByName("unknown10b", 1);
+	packet->setDataByName("permission_level",3);// added on 63182  for now till we figur it out 0=none,1=visitor,2=friend,3=trustee,4=owner
+	packet->setDataByName("num_adv", 9);
+
+	packet->setArrayDataByName("adv_name", "adv02_dun_drowned_caverns", 0);
+	packet->setArrayDataByName("adv_id", 6, 0);
+	packet->setArrayDataByName("adv_name", "adv02_dun_sundered_splitpaw_hub", 1);
+	packet->setArrayDataByName("adv_id", 5, 1);
+	packet->setArrayDataByName("adv_name", "exp03_rgn_butcherblock", 2);
+	packet->setArrayDataByName("adv_id", 8, 2);
+	packet->setArrayDataByName("adv_name", "exp03_rgn_greater_faydark", 3);
+	packet->setArrayDataByName("adv_id", 7, 3);
+	packet->setArrayDataByName("adv_name", "mod01_dun_crypt_of_thaen", 4);
+	packet->setArrayDataByName("adv_id", 3, 4);
+	packet->setArrayDataByName("adv_name", "mod01_dun_tombs_of_night", 5);
+	packet->setArrayDataByName("adv_id", 4, 5);
+	packet->setArrayDataByName("adv_name", "nektulos_mini01", 6);
+	packet->setArrayDataByName("adv_id", 0, 6);
+	packet->setArrayDataByName("adv_name", "nektulos_mini02", 7);
+	packet->setArrayDataByName("adv_id", 1, 7);
+	packet->setArrayDataByName("adv_name", "nektulos_mini03", 8);
+	packet->setArrayDataByName("adv_id", 2, 8);
+
+
+
 
 	LogWrite(MISC__TODO, 0, "TODO", "Put cl_ client commands back in variables (not Rules) so they can be dynamically maintained");
 	vector<Variable*>* variables = world.GetClientVariables();
@@ -4960,6 +5022,29 @@ EQ2Packet* ZoneServer::GetZoneInfoPacket(Client* client){
 		packet->setArrayDataByName("tab_index", i, i);
 		packet->setArrayDataByName("tab_name", ":410385c7df8bd37d:Dragon", i);
 		}
+		packet->setDataByName("unknown_mj", 1);//int8
+		packet->setDataByName("unknown_mj1", 335544320);//int32
+		packet->setDataByName("unknown_mj2", 4);//int32
+		packet->setDataByName("unknown_mj3", 3962504088);//int32
+		packet->setDataByName("unknown_mj4", 3985947216);//int32
+		packet->setDataByName("unknown_mj5", 1);//int32
+		packet->setDataByName("unknown_mj6", 386);//int32
+		packet->setDataByName("unknown_mj7", 4294967295);//int32
+		packet->setDataByName("unknown_mj8", 2716312211);//int32
+		packet->setDataByName("unknown_mj9", 1774338333);//int32
+		packet->setDataByName("unknown_mj10", 1);//int32
+		packet->setDataByName("unknown_mj11", 391);//int32
+		packet->setDataByName("unknown_mj12", 4294967295);//int32
+		packet->setDataByName("unknown_mj13", 3168965163);//int32
+		packet->setDataByName("unknown_mj14", 4117025286);//int32
+		packet->setDataByName("unknown_mj15", 1);//int32
+		packet->setDataByName("unknown_mj16", 394);//int32
+		packet->setDataByName("unknown_mj17", 4294967295);//int32
+		packet->setDataByName("unknown_mj18", 1790669110);//int32
+		packet->setDataByName("unknown_mj19", 107158108);//int32
+		packet->setDataByName("unknown_mj20", 1);//int32
+		packet->setDataByName("unknown_mj21", 393);//int32
+		packet->setDataByName("unknown_mj22", 4294967295);//int32
 
 	EQ2Packet* outapp = packet->serialize();
 	//packet->PrintPacket();

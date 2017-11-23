@@ -5712,7 +5712,9 @@ void Client::SendBuyBackList(bool sell){
 					else
 						packet->setArrayDataByName("quantity", buyback->quantity, i);
 					packet->setArrayDataByName("stack_size2", buyback->quantity, i);
-					packet->setArrayDataByName("description", master_item->description.c_str(), i);
+					if (GetVersion() <= 1096) {
+						packet->setArrayDataByName("description", master_item->description.c_str(), i);
+					}
 				}
 			}
 			MBuyBack.releasereadlock(__FUNCTION__, __LINE__);
