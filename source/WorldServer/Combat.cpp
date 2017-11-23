@@ -464,9 +464,6 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 		 CheckProcs(PROC_TYPE_BENEFICIAL, target);
 	 }
 
-	 if (target->GetHP() == target->GetTotalHP())
-		 return true;
-
 	 int32 heal_amt = 0;
 	 bool crit = false;
 
@@ -519,6 +516,9 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 
 	int16 type = 0;
 	if (heal_type == "Heal") {
+		if (target->GetHP() == target->GetTotalHP())
+			return true;
+
 		if(crit)
 			type = HEAL_PACKET_TYPE_CRIT_HEAL;
 		else
@@ -529,6 +529,9 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 		target->SetHP(target->GetHP() + heal_amt);
 	}
 	else if (heal_type == "Power"){
+		if (target->GetPower() == target->GetTotalPower())
+			return true;
+
 		if(crit)
 			type = HEAL_PACKET_TYPE_CRIT_MANA;
 		else
