@@ -985,6 +985,19 @@ sint32 Spawn::GetDissonance()
 	return basic_info.cur_dissonance;
 }
 
+void Spawn::ScalePet() {
+	if (!IsPet() || !IsEntity()) return;
+
+	double base = pow(GetLevel(), 2) * 2 + 40;
+
+	SetHP(static_cast<sint32>(base * 1.5));
+	SetPower(static_cast<sint32>(base * 1.5));
+
+	Entity* entity = static_cast<Entity*>(this);
+	entity->ChangePrimaryWeapon();
+	entity->ChangeSecondaryWeapon();
+}
+
 /* --< Alternate Advancement Points >-- */
 void Spawn::SetAssignedAA(sint16 new_val)
 {

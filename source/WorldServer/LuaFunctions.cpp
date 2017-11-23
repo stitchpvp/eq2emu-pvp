@@ -3687,6 +3687,9 @@ int EQ2Emu_lua_SummonPet(lua_State* state) {
 	(static_cast<NPC*>(pet))->SetPetSpellID(luaspell->spell->GetSpellData()->id);
 	// Set the spell tier used to create this pet
 	(static_cast<NPC*>(pet))->SetPetSpellTier(luaspell->spell->GetSpellData()->tier);
+
+	pet->ScalePet();
+
 	// Set the pets spawn type to 6
 	pet->SetSpawnType(6);
 	// Set the pets brain

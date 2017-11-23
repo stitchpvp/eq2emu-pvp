@@ -601,6 +601,7 @@ public:
 	sint32 GetSavagery();
 	sint32 GetTotalDissonance();
 	sint32 GetDissonance();
+	void ScalePet();
 	sint32 GetTotalSavageryBase();
 	sint32 GetTotalDissonanceBase();
 	sint16 GetAssignedAA();

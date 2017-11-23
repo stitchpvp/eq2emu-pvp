@@ -3429,6 +3429,7 @@ void Client::ChangeLevel(int16 old_level, int16 new_level){
 		NPC* pet = (NPC*)player->GetPet();
 		if (pet->GetMaxPetLevel() == 0 || new_level <= pet->GetMaxPetLevel()) {
 			pet->SetLevel(new_level);
+			pet->ScalePet();
 			PacketStruct* command_packet=configReader.getStruct("WS_CannedEmote", GetVersion());
 			if (command_packet){
 				command_packet->setDataByName("spawn_id", player->GetIDWithPlayerSpawn(pet));
@@ -3446,7 +3447,6 @@ void Client::ChangeLevel(int16 old_level, int16 new_level){
 		QueuePacket(level_update->serialize());
 		safe_delete(level_update);
 		GetCurrentZone()->StartZoneSpawnsForLevelThread(this);
-		//GetCurrentZone()->SendAllSpawnsForLevelChange(this);
 	}
 
 	PacketStruct* command_packet=configReader.getStruct("WS_CannedEmote", GetVersion());
@@ -3470,7 +3470,6 @@ void Client::ChangeLevel(int16 old_level, int16 new_level){
 	GetPlayer()->ChangeSecondaryWeapon();
 	GetPlayer()->ChangeRangedWeapon();
 	GetPlayer()->GetInfoStruct()->level = new_level;
-	// GetPlayer()->SetLevel(new_level);
 
 	LogWrite(MISC__TODO, 1, "TODO", "Get new HP/POWER/stat based on default values from DB\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
 
