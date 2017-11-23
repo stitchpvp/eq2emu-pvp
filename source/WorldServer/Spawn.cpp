@@ -990,8 +990,10 @@ void Spawn::ScalePet() {
 
 	double base = pow(GetLevel(), 2) * 2 + 40;
 
-	SetHP(static_cast<sint32>(base * 1.5));
-	SetPower(static_cast<sint32>(base * 1.5));
+	SetTotalHP(static_cast<sint32>(base * 1.5));
+	SetTotalPower(static_cast<sint32>(base * 1.5));
+	SetHP(GetTotalHP());
+	SetPower(GetTotalPower());
 
 	Entity* entity = static_cast<Entity*>(this);
 	entity->ChangePrimaryWeapon();
