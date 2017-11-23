@@ -4309,7 +4309,7 @@ void WorldDatabase::LoadSpellEffects() {
 	int32 total = 0;
 	MYSQL_RES *result = query.RunQuery2(Q_SELECT, "SELECT `spell_id`,`tier`,`percentage`,`bullet`,`description` "
 												  "FROM `spell_display_effects` "
-												  "ORDER BY `spell_id`,`id` ASC");
+												  "ORDER BY `spell_id`,`index` ASC");
 
 	while (result && (row = mysql_fetch_row(result))) {
 		if ((spell = master_spell_list.GetSpell(atoul(row[0]), atoi(row[1]))) && row[4]) {
