@@ -7433,15 +7433,19 @@ void Commands::Command_TellChannel(Client *client, Seperator *sep) {
 }
 
 void Commands::Command_Test(Client* client, Seperator* sep) {
-	bool val = false;
+	if (sep == nullptr) return;
 
-	if (atol(sep->arg[0]) == 1) {
-		client->GetPlayer()->set_character_flag(CF_IN_PVP);
-	} else {
-		client->GetPlayer()->reset_character_flag(CF_IN_PVP);
+	if (sep->IsSet(2) && sep->IsNumber(2)) {
+		client->GetCurrentZone()->SendStateCommand(client->GetPlayer(), atol(sep->arg[2]));
 	}
 
-	//client->GetPlayer()->InCombat(val);
+	if (sep->IsSet(0) && sep->IsNumber(0)) {
+		client->GetPlayer()->SetActionState(atol(sep->arg[0]));
+	}
+
+	if (sep->IsSet(1) && sep->IsNumber(1)) {
+		client->GetPlayer()->SetVisualState(atol(sep->arg[1]));
+	}
 }
 
 void Commands::Command_LeaveChannel(Client *client, Seperator *sep) {
