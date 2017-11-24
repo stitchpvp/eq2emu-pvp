@@ -344,9 +344,6 @@ EQ2Packet* PlayerSkillList::GetSkillPacket(int16 version){
 				sint16 skill_max_with_bonuses = CalculateSkillMaxValue(skill->skill_id, skill->max_val);
 				packet->setArrayDataByName("skill_id", skill->skill_id, i);
 				packet->setArrayDataByName("type", skill->skill_type, i);
-				//packet->setArrayDataByName("current_val", CalculateSkillValue(skill->skill_id, skill->current_val), i);
-				//packet->setArrayDataByName("base_val", skill->max_val, i);
-				//packet->setArrayDataByName("max_val", skill->max_val, i);
 				packet->setArrayDataByName("current_val", CalculateSkillValue(skill->skill_id, skill->current_val), i);
 				packet->setArrayDataByName("base_val", skill_max_with_bonuses, i);
 				packet->setArrayDataByName("skill_delta2", skill_max_with_bonuses - skill->max_val, i);

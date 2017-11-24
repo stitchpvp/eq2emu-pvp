@@ -495,6 +495,7 @@ extern MasterItemList master_item_list;
 #define ITEM_STAT_MAX_CRAFTING			814
 #define ITEM_STAT_COMPONENT_REFUND		815
 #define ITEM_STAT_BOUNTIFUL_HARVEST		816
+#define ITEM_STAT_PHYSICAL_DAMAGE_REDUCTION 817
 
 
 #pragma pack(1)
@@ -538,6 +539,9 @@ struct ItemStatsValues {
 	sint16			accuracy;
 	sint16			offensivespeed;
 	sint16			mitigation_increase;
+	sint8			physical_damage_reduction;
+	float			minimum_deflection_chance;
+	float			base_avoidance_bonus;
 };
 struct ItemCore {
 	int32	item_id;

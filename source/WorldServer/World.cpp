@@ -1614,6 +1614,18 @@ void World::AddBonuses(ItemStatsValues* values, int16 type, sint32 value, Entity
 				values->mitigation_increase += value;
 				break;
 			}
+			case ITEM_STAT_PHYSICAL_DAMAGE_REDUCTION: {
+				values->physical_damage_reduction += value;
+				break;
+			}
+			case ITEM_STAT_BASEAVOIDANCEBONUS: {
+				values->base_avoidance_bonus += value;
+				break;
+			}
+			case ITEM_STAT_MINIMUMDEFLECTIONCHANCE: {
+				values->minimum_deflection_chance += value;
+				break;
+			}
         	/*case ITEM_STAT_OFFENSIVESPEED:{
 				values->offensivespeed += value;
 				break;

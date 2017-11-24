@@ -643,7 +643,7 @@ int8 Entity::DetermineHit(Spawn* victim, int8 damage_type, float ToHitBonus, boo
 		if(skill)
 			roll_chance -= skill->current_val / 25;
 
-		if(rand()%roll_chance >= (chance - entity_victim->GetAgi()/125)){
+		if(rand()%roll_chance >= (chance - entity_victim->GetInfoStruct()->base_avoidance_bonus - entity_victim->GetAgi() / 125)){
 			entity_victim->CheckProcs(PROC_TYPE_EVADE, this);
 			return DAMAGE_PACKET_RESULT_DODGE;//successfully dodged
 		}
@@ -665,7 +665,7 @@ int8 Entity::DetermineHit(Spawn* victim, int8 damage_type, float ToHitBonus, boo
 
 		skill = entity_victim->GetSkillByName("Deflection", true);
 		if(skill){
-			if(rand()%100 >= (chance - skill->current_val/25)) { //successfully deflected
+			if(rand()%100 >= (chance - entity_victim->GetInfoStruct()->minimum_deflection_chance - skill->current_val/25)) { //successfully deflected
 				return DAMAGE_PACKET_RESULT_DEFLECT;
 			}
 		}
@@ -822,6 +822,7 @@ bool Entity::DamageSpawn(Entity* victim, int8 type, int8 damage_type, int32 low_
 		// Rudimentary mitigation
 		if (type == DAMAGE_PACKET_TYPE_SIMPLE_DAMAGE || type == DAMAGE_PACKET_TYPE_RANGE_DAMAGE) {
 			damage *= 1 - victim->GetMitigationPercentage(GetLevel());
+			damage *= 1 - victim->GetInfoStruct()->physical_damage_reduction / 100.0;
 		}
 	}
 

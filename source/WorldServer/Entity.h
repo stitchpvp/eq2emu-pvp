@@ -222,8 +222,11 @@ struct InfoStruct{
 	float			strikethrough;
 	float			accuracy;
 	float			offensivespeed;
+	float			base_avoidance_bonus;
+	float			minimum_deflection_chance;
 	float			rain;
 	float			wind;
+	sint8			physical_damage_reduction;
 	sint8			alignment;
 	int16			fame;
 
