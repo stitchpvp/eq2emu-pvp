@@ -1895,10 +1895,8 @@ void SpellProcess::GetSpellTargets(LuaSpell* luaspell)
 						else
 							luaspell->targets.push_back(caster->GetID()); // else return the caster
 					}
-					else if (target->IsNPC())
-						luaspell->targets.push_back(target->GetID()); // return target for single spell
 					else
-						luaspell->targets.push_back(caster->GetID()); // and if no target, cast on self
+						luaspell->targets.push_back(target->GetID());
 				} // end is player
 			} // end is friendly
 
