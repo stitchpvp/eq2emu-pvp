@@ -977,6 +977,7 @@ void LuaInterface::RegisterFunctions(lua_State* state) {
 	lua_register(state, "PauseMovement", EQ2Emu_lua_PauseMovement);
 	lua_register(state, "ResumeMovement", EQ2Emu_lua_ResumeMovement);
 	lua_register(state, "GetProcPercentageForWeapon", EQ2Emu_lua_GetProcPercentageForWeapon);
+	lua_register(state, "RemoveSpell", EQ2Emu_lua_RemoveSpell);
 }
 
 void LuaInterface::LogError(const char* error, ...)  {

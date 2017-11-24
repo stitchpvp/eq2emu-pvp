@@ -8319,6 +8319,27 @@ int EQ2Emu_lua_GetProcPercentageForWeapon(lua_State* state) {
 	return 1;
 }
 
+int EQ2Emu_lua_RemoveSpell(lua_State* state) {
+	if (!lua_interface)
+		return 0;
+
+	Spawn* spawn = lua_interface->GetSpawn(state);
+	int32 spell_id = lua_interface->GetInt32Value(state, 2);
+	Entity* caster = static_cast<Entity*>(lua_interface->GetSpawn(state, 3));
+
+	if (!spawn || !spawn->IsEntity()) {
+		return 0;
+	}
+
+	SpellEffects* spell_effect = static_cast<Entity*>(spawn)->GetSpellEffect(spell_id, caster);
+
+	if (spell_effect && spell_effect->spell) {
+		spell_effect->spell->caster->GetZone()->GetSpellProcess()->AddSpellCancel(spell_effect->spell);
+	}
+
+	return 1;
+}
+
 int EQ2Emu_lua_SpawnGroupByID(lua_State* state){
 	if (!lua_interface)
 		return 0;

@@ -402,4 +402,5 @@ int EQ2Emu_lua_GetWeaponDamageType(lua_State* state);
 int EQ2Emu_lua_PauseMovement(lua_State* state);
 int EQ2Emu_lua_ResumeMovement(lua_State* state);
 int EQ2Emu_lua_GetProcPercentageForWeapon(lua_State* state);
+int EQ2Emu_lua_RemoveSpell(lua_State* state);
 #endif
