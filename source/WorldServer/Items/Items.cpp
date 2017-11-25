@@ -2025,11 +2025,11 @@ void Item::serialize(PacketStruct* packet, bool show_name, Player* player, int16
 
 	// Adorns, set all to FF for now
 	if (packet->GetVersion() >= 1096) {// changed to 1096 for dov from 1188
-		packet->setSubstructDataByName("footer", "adorn_slots", 0x00, 0, 0);
-		packet->setSubstructDataByName("footer", "adorn_slots", 0x07, 0, 1);// temp adorn slot??
-		packet->setSubstructDataByName("footer", "adorn_slots", 0x05, 0, 2);
-		packet->setSubstructDataByName("footer", "adorn_slots", 0xff, 0, 3);
-		packet->setSubstructDataByName("footer", "adorn_slots", 0xff, 0, 4);
+		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 0);
+		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 1);// temp adorn slot??
+		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 2);
+		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 3);
+		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 4);
 		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 5);
 		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 6);
 		packet->setSubstructDataByName("footer", "adorn_slots", 0xFF, 0, 7);

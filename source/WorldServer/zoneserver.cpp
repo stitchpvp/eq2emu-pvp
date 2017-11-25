@@ -5158,20 +5158,15 @@ void ZoneServer::CheckLocationProximity() {
 						float z = prox->z;
 						float max_variation = prox->max_variation;
 						float total_diff = 0;
-						float diff = x - char_x; //Check X
-						if(diff < 0)
-							diff *= -1;
+						float diff = abs(x - char_x); //Check X
+
 						if(diff <=  max_variation) {
 							total_diff += diff;
-							diff = z - char_z; //Check Z (we check Z first because it is far more likely to be a much greater variation than y)
-							if(diff < 0)
-								diff *= -1;
+							diff = abs(z - char_z); //Check Z (we check Z first because it is far more likely to be a much greater variation than y)
 							if(diff <=  max_variation) {
 								total_diff += diff;
 								if(total_diff <=  max_variation) { //Check Total
-									diff = y - char_y; //Check Y
-									if(diff < 0)
-										diff *= -1;
+									diff = abs(y - char_y); //Check Y
 									if(diff <=  max_variation) {
 										total_diff += diff;
 										if(total_diff <= max_variation) {

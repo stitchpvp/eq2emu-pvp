@@ -7409,17 +7409,6 @@ int EQ2Emu_lua_SetSpellSnareValue(lua_State* state) {
 
 		static_cast<Entity*>(spawn)->SetSnareValue(spell, val);
 	}
-	else {
-		spell->MSpellTargets.readlock(__FUNCTION__, __LINE__);
-		for (int8 i = 0; i < spell->targets.size(); i++){
-			spawn = spell->caster->GetZone()->GetSpawnByID(spell->targets.at(i));
-			if (!spawn || !spawn->IsEntity())
-				continue;
-
-			static_cast<Entity*>(spawn)->SetSnareValue(spell, val);
-		}
-		spell->MSpellTargets.releasereadlock(__FUNCTION__, __LINE__);
-	}
 
 	return 0;
 }
