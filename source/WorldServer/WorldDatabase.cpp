@@ -231,7 +231,7 @@ void WorldDatabase::SavePlayerActiveSpells(Client* client) {
 	Query query;
 	SpellEffects* se = client->GetPlayer()->GetSpellEffects();
 
-	query.RunQuery2(Q_DELETE, "DELETE FROM character_active_spells WHERE character_id = %u AND target_character_id = %u", client->GetPlayer()->GetCharacterID(), client->GetPlayer()->GetCharacterID());
+	DeleteCharacterActiveSpells(client);
 
 	for (int i = 0; i < NUM_SPELL_EFFECTS; i++) {
 		LuaSpell* lua_spell = se[i].spell;
@@ -244,6 +244,18 @@ void WorldDatabase::SavePlayerActiveSpells(Client* client) {
 				query.RunQuery2(Q_INSERT, "INSERT INTO character_active_spells (character_id, target_character_id, spell_id, spell_tier) VALUES (%u, %u, %u, %u) ON DUPLICATE KEY UPDATE character_id = character_id", ((Player*)caster)->GetCharacterID(), ((Player*)target)->GetCharacterID(), lua_spell->spell->GetSpellID(), lua_spell->spell->GetSpellTier());
 			}
 		}
+	}
+}
+
+void WorldDatabase::DeleteCharacterActiveSpells(Client* client, bool delete_all) {
+	if (!client) return;
+
+	Query query;
+
+	if (delete_all) {
+		query.RunQuery2(Q_DELETE, "DELETE FROM character_active_spells WHERE character_id = %u OR target_character_id = %u", client->GetPlayer()->GetCharacterID(), client->GetPlayer()->GetCharacterID());
+	} else {
+		query.RunQuery2(Q_DELETE, "DELETE FROM character_active_spells WHERE character_id = %u AND target_character_id = %u", client->GetPlayer()->GetCharacterID(), client->GetPlayer()->GetCharacterID());
 	}
 }
 

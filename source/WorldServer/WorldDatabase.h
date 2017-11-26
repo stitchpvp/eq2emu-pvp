@@ -122,7 +122,8 @@ public:
 	void	DeleteCharacterSkill(int32 char_id, Skill* skill);
 	void	DeleteCharacterSpell(int32 character_id, int32 spell_id);
 	int32	LoadCharacterSpells(int32 char_id, Player* player);
-	void SavePlayerActiveSpells(Client * client);
+	void SavePlayerActiveSpells(Client* client);
+	void DeleteCharacterActiveSpells(Client* client, bool delete_all = false);
 	void	SaveQuickBar(int32 char_id, vector<QuickBarItem*>* quickbar_items);
 	void	SavePlayerSpells(Client* client);
 	int32	LoadSkills();

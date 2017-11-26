@@ -2843,6 +2843,7 @@ void ZoneServer::RemoveClient(Client* client)
 				LogWrite(ZONE__DEBUG, 0, "Zone", "Removing client '%s' (%u) due to Camp/Quit...", client->GetPlayer()->GetName(), client->GetPlayer()->GetCharacterID());
 			}
 
+			database.SavePlayerActiveSpells(client);
 			GetSpellProcess()->RemoveSpellTimersFromSpawn(client->GetPlayer(), true);
 				
 			client->GetPlayer()->DismissPet((NPC*)client->GetPlayer()->GetPet());
@@ -4331,10 +4332,10 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 		AddDeadSpawn(dead, pop_timer);
 
 	// if dead was a player clear hostile spells from its spell queue
-	if (dead->IsPlayer())
-		spellProcess->RemoveSpellFromQueue((Player*)dead, true);
-
-
+	if (dead->IsPlayer()) {
+		spellProcess->RemoveSpellFromQueue(static_cast<Player*>(dead), true);
+		database.DeleteCharacterActiveSpells(GetClientBySpawn(dead), true);
+	}
 
 	// ResetPetInfo() is called in DismissPet(), might not need to be here
 
