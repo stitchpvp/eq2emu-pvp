@@ -302,7 +302,7 @@ struct ServerEmoteMessage_Struct {
 	char	message[0];
 };
 
-struct TableVersion{
+/*struct TableVersion{
 	char	name[64];
 	int32	version;
 	int32	max_table_version;
@@ -310,7 +310,15 @@ struct TableVersion{
 	sint32	data_version;
 	int8	last;
 	char	column_names[1000];
-};
+};*/
+
+typedef struct {
+	char name[256];
+	unsigned int name_len;
+	unsigned int version;
+	unsigned int data_version;
+} TableVersion;
+
 template<class Type> void AddPtrData(string* buffer, Type& data){
 	buffer->append((char*)&data, sizeof(Type));
 }

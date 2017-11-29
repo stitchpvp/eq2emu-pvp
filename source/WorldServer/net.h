@@ -30,8 +30,8 @@
 #else
 	#include <cerrno>
 	#include <fcntl.h>
+	#include <WinSock2.h>
 	#include <windows.h>
-	#include <winsock.h>
 #endif
 
 #include "../common/linked_list.h"

@@ -31,6 +31,7 @@
 #include "World.h"
 #include "LuaInterface.h"
 #include "PVP.h"
+#include "Zone/SPGrid.h"
 
 extern ConfigReader configReader;
 extern RuleManager rule_manager;
@@ -86,6 +87,8 @@ Spawn::Spawn(){
 	req_quests_override = 0;
 	req_quests_private = false;
 	m_illusionModel = 0;
+	Cell_Info.CurrentCell = nullptr;
+	Cell_Info.CellListIndex = -1;
 	m_Update.SetName("Spawn::m_Update");
 	m_requiredHistory.SetName("Spawn::m_requiredHistory");
 	m_requiredQuests.SetName("Spawn::m_requiredQuests");
@@ -2150,6 +2153,18 @@ bool Spawn::CalculateChange(){
 				SetY(GetY() + ((tar_vy*tar_vector)*time_step), false);
 				SetZ(GetZ() + ((tar_vz*tar_vector)*time_step), false);
 			}
+
+			if (GetZone()->Grid != nullptr) {
+				Cell* newCell = GetZone()->Grid->GetCell(GetX(), GetZ());
+				if (newCell != Cell_Info.CurrentCell) {
+					GetZone()->Grid->RemoveSpawnFromCell(this);
+					GetZone()->Grid->AddSpawn(this, newCell);
+		}
+
+				int32 newGrid = GetZone()->Grid->GetGridID(this);
+				if (newGrid != appearance.pos.grid_id)
+					SetPos(&(appearance.pos.grid_id), newGrid);
+	}
 		}
 	}
 	return remove_needed;

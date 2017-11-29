@@ -141,6 +141,12 @@ class Spell;
 class ZoneServer;
 class Quest;
 struct LUAHistory;
+struct Cell;
+
+struct CellInfo {
+	Cell* CurrentCell;
+	int CellListIndex;
+};
 
 struct MovementData{
 	float x;
@@ -917,6 +923,8 @@ public:
 		SetInfo(&m_illusionModel, val, setUpdateFlags);
 	}
 	int16 GetIllusionModel() { return m_illusionModel; }
+
+	CellInfo Cell_Info;
 
 protected:
 	bool	send_spawn_changes;

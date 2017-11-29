@@ -562,7 +562,7 @@ EQ2Packet* PlayerInfo::serialize3(PacketStruct* packet, int16 version){
 	return 0;
 }
 
-void PlayerInfo::SetAccountAge(int8 age){
+void PlayerInfo::SetAccountAge(int16 age){
 	info_struct->account_age_base = age;
 }
 
@@ -1423,8 +1423,21 @@ vector<EQ2Packet*> Player::EquipItem(int16 index, int16 version, int8 slot_id){
 			else
 				slot = slot_id;
 			packets = UnequipItem(slot, item->details.inv_slot_id, item->details.slot_id, version);
+			// If item is a 2handed weapon and something is in the secondary, unequip the secondary
+			if (item->IsWeapon() && item->weapon_info->wield_type == ITEM_WIELD_TYPE_TWO_HAND && equipment_list.GetItem(EQ2_SECONDARY_SLOT) != 0) {
+				vector<EQ2Packet*> tmp_packets = UnequipItem(EQ2_SECONDARY_SLOT, -999, 0, version);
+				//packets.reserve(packets.size() + tmp_packets.size());
+				packets.insert(packets.end(), tmp_packets.begin(), tmp_packets.end());
+			}
 		}
-		else if(canEquip && slot < 255){
+		else if(canEquip && slot < 255) {
+			// If item is a 2handed weapon and something is in the secondary, unequip the secondary
+			if (item->IsWeapon() && item->weapon_info->wield_type == ITEM_WIELD_TYPE_TWO_HAND && equipment_list.GetItem(EQ2_SECONDARY_SLOT) != 0) {
+				vector<EQ2Packet*> tmp_packets = UnequipItem(EQ2_SECONDARY_SLOT, -999, 0, version);
+				//packets.reserve(packets.size() + tmp_packets.size());
+				packets.insert(packets.end(), tmp_packets.begin(), tmp_packets.end());
+			}
+
 			database.DeleteItem(GetCharacterID(), item, "NOT-EQUIPPED");
 
 			if (item->GetItemScript() && lua_interface)

@@ -69,28 +69,6 @@ extern RuleManager rule_manager;
 extern MasterAAList master_aa_list;
 extern MasterRaceTypeList race_types_list;
 
-// Windows as complaing so just made this for linux only
-#ifndef WIN32
-// __cplusplus <= 199711L
-string to_string(int val) {
-	char temp[16];
-	sprintf(temp, "%i", val);
-	return string(temp);
-}
-
-string to_string(unsigned int val) {
-	char temp[16];
-	sprintf(temp, "%u", val);
-	return string(temp);
-}
-
-string to_string(float val) {
-	char temp[16];
-	sprintf(temp, "%f", val);
-	return string(temp);
-}
-#endif
-
 EQ2Packet* RemoteCommands::serialize(){
 	buffer.clear();
 	vector<EQ2_RemoteCommandString>::iterator command_list;
@@ -2894,7 +2872,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 				spawn = new GroundSpawn();
 				memset(&spawn->appearance, 0, sizeof(spawn->appearance));
 			}
-			else if (sep && sep->arg[4][0] && strncasecmp(sep->arg[0], "sign", 11) == 0 && sep->IsNumber(1) && sep->IsNumber(2) && sep->IsNumber(3)) {
+			else if (sep && sep->arg[4][0] && strncasecmp(sep->arg[0], "sign", 4) == 0 && sep->IsNumber(1) && sep->IsNumber(2) && sep->IsNumber(3)) {
 				spawn = new Sign();
 				memset(&spawn->appearance, 0, sizeof(spawn->appearance));
 			}
@@ -4155,6 +4133,7 @@ void Commands::Command_StopFollow(Client* client, Seperator* sep)
 	}
 }
 
+#include "../Zone/SPGrid.h"
 /* 
 	Function: Command_Grid()
 	Purpose	: Show player's current Grid ID
@@ -4165,6 +4144,11 @@ void Commands::Command_StopFollow(Client* client, Seperator* sep)
 void Commands::Command_Grid(Client* client)
 {
 	client->Message(CHANNEL_COLOR_YELLOW, "Your Grid ID is %u", client->GetPlayer()->appearance.pos.grid_id);
+
+	if (client->GetCurrentZone()->Grid != nullptr) {
+		int32 grid = client->GetCurrentZone()->Grid->GetGridID(client->GetPlayer());
+		client->Message(CHANNEL_COLOR_YELLOW, "SPGrid result is %u", grid);
+	}
 }
 
 /* 

@@ -21,7 +21,7 @@
 #define EQ2WORLD_EMU_DATABASE_H
 
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
 	#include <windows.h>
 #endif
 #include <mysql.h>
@@ -124,6 +124,7 @@ public:
 	int32	LoadCharacterSpells(int32 char_id, Player* player);
 	void SavePlayerActiveSpells(Client* client);
 	void DeleteCharacterActiveSpells(Client* client, bool delete_all = false);
+	int32	LoadItemBlueStats();
 	void	SaveQuickBar(int32 char_id, vector<QuickBarItem*>* quickbar_items);
 	void	SavePlayerSpells(Client* client);
 	int32	LoadSkills();
@@ -251,9 +252,12 @@ public:
 	int32	LoadThrownWeapons();
 	int32	LoadBaubles();
 	int32	LoadBooks();
+	int32	LoadItemsets();
 	int32	LoadHouseItem();
 	int32	LoadRecipeBookItems();
 	int32	LoadArmor();
+	int32	LoadAdornments();
+	int32	LoadClassifications();
 	int32	LoadShields();
 	int32	LoadBags();
 	int32	LoadFoods();
@@ -369,6 +373,10 @@ public:
 	void				ListLocations(Client* client);
 	void				ListLocationPoints(Client* client, int32 location_id);
 	bool				LocationExists(int32 location_id);
+
+
+	bool				GetTableVersions(vector<TableVersion *> *table_versions);
+	bool				QueriesFromFile(const char *file);
 
 
 	/* Achievements */

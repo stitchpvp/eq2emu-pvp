@@ -542,7 +542,7 @@ bool LuaInterface::CallZoneScript(lua_State* state, int8 num_parameters) {
 lua_State* LuaInterface::LoadLuaFile(const char* name) {
 	if(shutting_down)
 		return 0;
-	lua_State* state = lua_open();
+	lua_State* state = luaL_newstate();
 	luaL_openlibs(state);
 	if(luaL_dofile(state, name) == 0){
 		RegisterFunctions(state);

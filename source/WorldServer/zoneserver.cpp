@@ -28,8 +28,8 @@ using namespace std;
 #include "Commands/Commands.h"
 
 #ifdef WIN32
+#include <WinSock2.h>
 #include <windows.h>
-#include <winsock.h>
 #else
 #include <sys/socket.h>
 #ifdef FREEBSD //Timothy Whitman - January 7, 2003
@@ -77,6 +77,8 @@ extern int errno;
 #include "RaceTypes/RaceTypes.h"
 #include <algorithm>
 #include "PVP.h"
+
+#include "Zone/SPGrid.h"
 
 #ifdef WIN32
 #define snprintf	_snprintf
@@ -145,6 +147,8 @@ ZoneServer::ZoneServer(const char* name) {
 	dawn_minute = 0;
 	reloading_spellprocess = false;
 	MMasterZoneLock = new CriticalSection(MUTEX_ATTRIBUTE_RECURSIVE);
+	
+	Grid = nullptr;
 	weather_allowed = true;
 	spawnthread_active = false;
 	combatthread_active = false;
@@ -196,6 +200,9 @@ ZoneServer::~ZoneServer() {
 		LogWrite(INSTANCE__DEBUG, 0, "Instance",  "Non persistent instance shutting down, deleting instance");
 		database.DeleteInstance(instanceID);
 	}
+
+	if (Grid != nullptr)
+		delete Grid;
 
 	LogWrite(ZONE__INFO, 0, "Zone", "Completed zone shutdown of '%s'", zone_name);
 	--numzones;
@@ -256,6 +263,20 @@ void ZoneServer::Init()
 
 	world.UpdateServerStatistic(STAT_SERVER_NUM_ACTIVE_ZONES, 1);
 	UpdateWindowTitle(0);
+
+	if (Grid == nullptr) {
+		Grid = new SPGrid(string(GetZoneFile()), 0);
+		if (Grid->Init())
+			LogWrite(ZONE__DEBUG, 0, "SPGrid", "ZoneServer::Init() successfully initialized the grid");
+		else {
+			LogWrite(ZONE__DEBUG, 0, "SPGrid", "ZoneServer::Init() failed to initialize the grid... poor tron...");
+			delete Grid;
+			Grid = nullptr;
+		}
+	}
+	else
+		LogWrite(ZONE__ERROR, 0, "SPGrid", "ZoneServer::Init() Grid is not null in init, wtf!");
+
 	MMasterSpawnLock.SetName("ZoneServer::MMasterSpawnLock");
 	m_npc_faction_list.SetName("ZoneServer::npc_faction_list");
 	m_enemy_faction_list.SetName("ZoneServer::enemy_faction_list");
@@ -2788,6 +2809,9 @@ void ZoneServer::AddSpawn(Spawn* spawn) {
 		((Player*)spawn)->SetCharSheetChanged(true);
 	}
 
+	if (Grid != nullptr) {
+		Grid->AddSpawn(spawn);
+	}
 }
 
 void ZoneServer::AddClient(Client* client){
@@ -3643,6 +3667,10 @@ void ZoneServer::RemoveFromRangeMap(Client* client){
 void ZoneServer::RemoveSpawn(Spawn* spawn, bool delete_spawn, bool respawn, bool lock) 
 {
 	LogWrite(ZONE__DEBUG, 3, "Zone", "Processing RemoveSpawn function...");
+
+	if (Grid != nullptr) {
+		Grid->RemoveSpawnFromCell(spawn);
+	}
 
 	RemoveSpawnSupportFunctions(spawn);
 	RemoveDeadEnemyList(spawn);

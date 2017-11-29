@@ -4249,7 +4249,7 @@ void WorldDatabase::LoadSpells()
 			if( lua_script.length() > 0 )
 				LogWrite(SPELL__DEBUG, 5, "Spells", "\t%i. %s (Tier: %i) - '%s'", spell_id, spell_name.c_str(), data->tier, lua_script.c_str()); 		
 			else if(data->is_active)
-				LogWrite(SPELL__WARNING, 0, "Spells", "\tSpell %s (%u, Tier: %i) set 'Active', but missing LUAScript", spell_name.c_str(), spell_id, data->tier);
+				LogWrite(SPELL__WARNING, 1, "Spells", "\tSpell %s (%u, Tier: %i) set 'Active', but missing LUAScript", spell_name.c_str(), spell_id, data->tier);
 
 		} // end while
 	} // end else
@@ -5443,6 +5443,38 @@ bool WorldDatabase::LocationExists(int32 location_id) {
 			ret = true;
 	}
 	return ret;
+}
+
+bool WorldDatabase::GetTableVersions(vector<TableVersion*>* table_versions) {
+	DatabaseResult result;
+	TableVersion *table_version;
+	bool success;
+
+	//don't treat 1146 (table not found) as an error since the patch server will create it
+	database_new.SetIgnoredErrno(1146);
+
+	success = database_new.Select(&result, "SELECT `name`,`version`,`download_version`\n"
+		"FROM `table_versions`\n");
+	
+	database_new.RemoveIgnoredErrno(1146);
+
+	if (!success)
+		return false;
+
+	while (result.Next()) {
+		table_version = (TableVersion *)malloc(sizeof(*table_version));
+		table_version->name_len = (unsigned int)strlcpy(table_version->name, result.GetString(0), sizeof(table_version->name));
+		table_version->version = result.GetInt32(1);
+		table_version->data_version = result.GetInt32(2);
+
+		table_versions->push_back(table_version);
+	}
+
+	return true;
+}
+
+bool WorldDatabase::QueriesFromFile(const char * file) {
+	return database_new.QueriesFromFile(file);
 }
 
 bool WorldDatabase::CheckBannedIPs(const char* loginIP)

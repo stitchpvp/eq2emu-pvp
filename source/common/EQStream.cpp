@@ -18,8 +18,8 @@
     along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 */
 #ifdef WIN32
+#include <WinSock2.h>
 	#include <windows.h>
-	#include <winsock.h>
 #endif
 #include "debug.h"
 #include <string>

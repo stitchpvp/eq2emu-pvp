@@ -3,7 +3,7 @@
 
 #include "types.h"
 #ifdef _WIN32
-#include <WinSock.h>	//#include <my_global.h> when we/if we go to winsock2 :/
+#include <WinSock2.h>	//#include <my_global.h> when we/if we go to winsock2 :/
 #endif
 #include <mysql.h>
 

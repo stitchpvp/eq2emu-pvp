@@ -27,11 +27,7 @@
 #include "zoneserver.h"
 #include "client.h"
 
-extern "C" {
-#include "../LUA/include/lua.h"
-#include "../LUA/include/lualib.h"
-#include "../LUA/include/lauxlib.h"
-}
+#include "../LUA/lua.hpp"
 
 using namespace std;
 

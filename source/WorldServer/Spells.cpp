@@ -151,9 +151,18 @@ void Spell::SetPacketInformation(PacketStruct* packet, Client* client, bool disp
 	packet->setSubstructDataByName("spell_info", "icon",spell->icon);
 	packet->setSubstructDataByName("spell_info", "icon2",spell->icon_heroic_op);	// fix struct element name eventually
 	packet->setSubstructDataByName("spell_info", "icontype",spell->icon_backdrop);	// fix struct element name eventually
-	packet->setSubstructDataByName("spell_info", "version",0x11);
-	packet->setSubstructDataByName("spell_info", "sub_version",0x14);
+	
+	if (packet->GetVersion() >= 63119) {
+		packet->setSubstructDataByName("spell_info", "version", 0x04);
+		packet->setSubstructDataByName("spell_info", "sub_version", 0x24);
+	}
+	else {
+		packet->setSubstructDataByName("spell_info", "version", 0x11);
+		packet->setSubstructDataByName("spell_info", "sub_version", 0x14);
+	}
+
 	packet->setSubstructDataByName("spell_info", "type", spell->type);
+	packet->setSubstructDataByName("spell_info", "unknown_MJ1d", 1); //63119 test
 	packet->setSubstructDataByName("spell_info", "class_skill", spell->class_skill);
 	packet->setSubstructDataByName("spell_info", "mastery_skill", spell->mastery_skill);
 	packet->setSubstructDataByName("spell_info", "duration_flag", spell->duration_until_cancel);

@@ -19,8 +19,8 @@
 */
 #include <assert.h>
 #ifdef _WIN32
+#include <WinSock2.h>
 #include <windows.h>
-#include <winsock.h>
 #include <process.h>
 #else
 #include <pthread.h>

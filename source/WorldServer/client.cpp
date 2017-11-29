@@ -42,8 +42,8 @@ along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 //#include "Quests.h"
 
 #ifdef WIN32
+#include <WinSock2.h>
 #include <windows.h>
-#include <winsock.h>
 #define snprintf	_snprintf
 #define vsnprintf	_vsnprintf
 #define strncasecmp	_strnicmp
@@ -594,7 +594,6 @@ void Client::SendCharInfo(){
 	PacketStruct* packet = configReader.getStruct("WS_SetControlGhost",GetVersion());
 	if(packet){
 		packet->setDataByName("spawn_id", player->GetIDWithPlayerSpawn(player));
-		packet->setDataByName("size", 0.56);
 		packet->setDataByName("unknown2", 255);
 		EQ2Packet* app = packet->serialize();
 		QueuePacket(app);
@@ -1389,7 +1388,7 @@ bool Client::HandlePacket(EQApplicationPacket *app) {
 									  }
 		case OP_StopItemCreationMsg: {
 			LogWrite(OPCODE__DEBUG, 1, "Opcode", "Opcode 0x%X (%i): OP_StopItemCreationMsg", opcode, opcode);
-			DumpPacket(app->pBuffer, app->size);
+			//DumpPacket(app->pBuffer, app->size);
 			GetCurrentZone()->GetTradeskillMgr()->StopCrafting(this);
 			break;
 										  }
@@ -2233,8 +2232,14 @@ void Client::HandleExamineInfoRequest(EQApplicationPacket* app){
 		}
 		request->LoadPacketData(app->pBuffer, app->size);
 		int32 id = request->getType_int32_ByName("id");
-		Item* item = master_item_list.GetItem(id);
-		if(item){// && sent_item_details.count(id) == 0){
+		int32 unique_id = request->getType_int32_ByName("unique_id");
+
+		Item* item = GetPlayer()->item_list.GetItemFromUniqueID(unique_id, true);
+		if (!item)
+			item = GetPlayer()->GetEquipmentList()->GetItemFromUniqueID(unique_id);
+		if (!item)
+			item = master_item_list.GetItem(id);
+		if (item){
 			sent_item_details[id] = true;
 			EQ2Packet* app = item->serialize(GetVersion(), false, GetPlayer());
 			//DumpPacket(app);
@@ -3774,7 +3779,13 @@ void Client::Loot(int32 total_coins, vector<Item*>* items, Entity* entity){
 				tmpPacket = item->serialize(GetVersion(), true, GetPlayer(), false, 1, 0, false, true);
 
 				int8 offset = 0;
-				if(GetVersion() >= 860){
+				if (GetVersion() >= 63119) {
+					offset = 13;
+					/*memcpy(ptr, tmpPacket->pBuffer + 11, tmpPacket->size - 11);
+					ptr += tmpPacket->size - 11;
+					packet_size += tmpPacket->size - 11;*/
+				}
+				else if (GetVersion() >= 860){
 					offset = 11;
 					/*memcpy(ptr, tmpPacket->pBuffer + 11, tmpPacket->size - 11);
 					ptr += tmpPacket->size - 11;
@@ -4615,8 +4626,9 @@ void Client::GiveQuestReward(Quest* quest){
 	DisplayQuestComplete(quest);
 	if(quest->GetExpReward() > 0){
 		int16 level = player->GetLevel();
-		if (player->AddXP(quest->GetExpReward())) {
-			SimpleMessage(CHANNEL_COLOR_EXP, "You gain experience!");
+		int32 xp = quest->GetExpReward();
+		if (player->AddXP(xp)) {
+			Message(CHANNEL_COLOR_EXP, "You gain %u experience!",(int32)xp);
 			if(player->GetLevel() != level)
 				ChangeLevel(level, player->GetLevel());
 			player->SetCharSheetChanged(true);
@@ -4624,8 +4636,9 @@ void Client::GiveQuestReward(Quest* quest){
 	}
 	if(quest->GetTSExpReward() > 0){
 		int8 ts_level = player->GetTSLevel();
-		if (player->AddTSXP(quest->GetTSExpReward())) {
-			SimpleMessage(CHANNEL_COLOR_EXP, "You gain tradeskill experience!");
+		int32 xp = quest->GetTSExpReward();
+		if (player->AddTSXP(xp)) {
+			Message(CHANNEL_COLOR_EXP, "You gain %u tradeskill experience!",  (int32)xp);
 			if(player->GetTSLevel() != ts_level)
 				ChangeTSLevel(ts_level, player->GetTSLevel());
 			player->SetCharSheetChanged(true);
@@ -5014,8 +5027,11 @@ float Client::CalculateSellMultiplier(int32 merchant_id){
 
 void Client::SellItem(int32 item_id, int8 quantity, int32 unique_id){
 	Spawn* spawn = GetMerchantTransaction();
+	Guild* guild = GetPlayer()->GetGuild();
 	if(spawn && spawn->GetMerchantID() > 0){
+		int32 total_status_sell_price = 0; //for status
 		float multiplier = CalculateBuyMultiplier(spawn->GetMerchantID());
+		int32 status_sell_price = 0; //for status
 		Item* master_item = master_item_list.GetItem(item_id);
 		Item* item = 0;
 		if (unique_id == 0)
@@ -5032,6 +5048,20 @@ void Client::SellItem(int32 item_id, int8 quantity, int32 unique_id){
 			if(quantity > item->details.count)
 				quantity = item->details.count;
 			int32 total_sell_price = sell_price * quantity;
+
+			//------------------------------For Selling Status Items
+			status_sell_price = (int32)(master_item->sell_status * multiplier);
+			if (status_sell_price > item->sell_status )
+				status_sell_price = item->sell_status;
+			if (quantity > item->details.count)
+				quantity = item->details.count;
+			if (player->GetGuild()){
+				total_status_sell_price = status_sell_price * quantity;
+				player->GetInfoStruct()->status_points += total_status_sell_price;
+				guild->UpdateGuildStatus(GetPlayer(), total_status_sell_price / 10);
+				guild->SendGuildMemberList();
+				guild->AddEXPCurrent((total_status_sell_price / 10), true);
+			}
 			if(quantity > 1)
 				Message(CHANNEL_COLOR_MERCHANT, "You sell %i \\aITEM %u 0:%s\\/a to %s for %s.", quantity, master_item->details.item_id, master_item->name.c_str(), spawn->GetName(), GetCoinMessage(total_sell_price).c_str());
 			else
@@ -5627,16 +5657,22 @@ void Client::SendSellMerchantList(bool sell){
 					if(sell_price > item->sell_price)
 						sell_price = item->sell_price;
 					packet->setArrayDataByName("item_name", item->name.c_str(), i);
+					string thename = item->name;
+					
 					packet->setArrayDataByName("price", sell_price, i);
+					if (player->GetGuild()){
+						packet->setArrayDataByName("status", 0, i);//additive to status 2 maybe for server bonus etc
+						packet->setArrayDataByName("status2", item->sell_status, i); //this one is the main status
+					}
 					packet->setArrayDataByName("item_id", item->details.item_id, i);
-					packet->setArrayDataByName("unique_item_id", item->details.unique_id, i);
+					packet->setArrayDataByName("unique_item_id", (item->details.unique_id, i));
 					packet->setArrayDataByName("stack_size", item->details.count, i);
 					packet->setArrayDataByName("icon", item->details.icon, i);
 					if(item->generic_info.adventure_default_level > 0)
 						tmp_level = item->generic_info.adventure_default_level;
 					else
 						tmp_level = item->generic_info.tradeskill_default_level;
-					packet->setArrayDataByName("level", tmp_level, i);
+					packet->setArrayDataByName("level", item->details.recommended_level, i);
 					packet->setArrayDataByName("tier", item->details.tier, i);
 					packet->setArrayDataByName("item_id2", item->details.item_id, i);
 					sint8 item_difficulty = player->GetArrowColor(tmp_level);
@@ -5659,6 +5695,9 @@ void Client::SendSellMerchantList(bool sell){
 					packet->setDataByName("type", 129);
 				else
 					packet->setDataByName("type", 1);
+				packet->setDataByName("unknown8a", 16256,6);
+				packet->setDataByName("unknown8a", 16256, 10);
+				//packet->PrintPacket();
 				EQ2Packet* outapp = packet->serialize();
 				//DumpPacket(outapp);
 				QueuePacket(outapp);

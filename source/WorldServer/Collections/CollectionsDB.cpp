@@ -18,7 +18,7 @@
     along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 */
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
 	#include <windows.h>
 #endif
 #include <mysql.h>

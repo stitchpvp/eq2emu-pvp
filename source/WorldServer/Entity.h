@@ -179,7 +179,7 @@ struct InfoStruct{
 	int8			tradeskill_class1;
 	int8			tradeskill_class2;
 	int8			tradeskill_class3;
-	int8			account_age_base;
+	int16			account_age_base;
 	int8			account_age_bonus[19];
 	int16			absorb;
 	int32			xp;

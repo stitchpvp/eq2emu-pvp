@@ -84,6 +84,8 @@ LuaInterface* lua_interface = new LuaInterface();
 #include "Languages.h"
 #include "Achievements/Achievements.h"
 
+#include "Patch/patch.h"
+
 volatile bool RunLoops = true;
 sint32 numclients = 0;
 sint32 numzones = 0;
@@ -106,6 +108,7 @@ MasterTitlesList master_titles_list;
 MasterLanguagesList master_languages_list;
 extern MasterAchievementList master_achievement_list;
 extern map<int16, int16> EQOpcodeVersions;
+PatchServer patch;
 
 ThreadReturnType ItemLoad (void* tmp);
 ThreadReturnType AchievmentLoad (void* tmp);
@@ -160,10 +163,24 @@ int main(int argc, char** argv) {
 	net.ReadLoginINI();
 	if(loginserver.UpdatesAuto() || loginserver.UpdatesAsk() || loginserver.UpdatesAutoData()){
 		LogWrite(INIT__PATCHER_INFO, 0, "Patcher", "Connecting to DB PatchServer...");
-		int16 updateport = 0;
+		// Old DB patch server
+		/*int16 updateport = 0;
 		char* updateaddress = net.GetUpdateServerInfo(&updateport);
 		loginserver.ConnectToUpdateServer(updateaddress, updateport);
-		LogWrite(INIT__PATCHER_INFO, 0, "Patcher", "DB Update check completed...");
+		LogWrite(INIT__PATCHER_INFO, 0, "Patcher", "DB Update check completed...");*/
+
+		
+		//New patch server
+		if (!patch.IsEnabled())
+			LogWrite(INIT__PATCHER_INFO, 0, "Patcher", "Not checking patch server for updates");
+		else {
+			bool success = patch.Start();
+			if (success)
+				success = patch.Process();
+			patch.Stop();
+			//if (patch.QuitAfter())
+				//looping = false;
+		}
 	}
 	
 	// JA: Grouping all System (core) data loads together for timing purposes
@@ -799,9 +816,11 @@ bool NetConnection::ReadLoginINI() {
 		{
 			if (!strcasecmp(type, "updateserveraddress")) {
 				strncpy (updateaddress, buf, 250);
+				patch.SetHost(buf);
 			}
 			if (!strcasecmp(type, "updateserverport")) {
 				updateport=atoi(buf);
+				patch.SetPort(buf);
 			}
 		}
 	}

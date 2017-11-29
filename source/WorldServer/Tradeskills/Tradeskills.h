@@ -21,7 +21,7 @@
 #define __EQ2_TRADESKILLS__
 
 #include "../../common/types.h"
-#include "../../common//Mutex.h"
+#include "../../common/Mutex.h"
 #include "../Items/Items_DoV.h"
 #include <map>
 class Player;

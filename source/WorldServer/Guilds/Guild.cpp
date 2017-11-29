@@ -187,9 +187,9 @@ void Guild::AddEXPCurrent(sint64 exp, bool send_packet) {
 				sprintf(message, "The %s guild <%s> has attained level %u", adjective, name, level);
 				zone_list.HandleGlobalAnnouncement(message);
 			}
-			save_needed = true;
-			ret = true;
 		}
+		save_needed = true;
+		ret = true;
 	}
 	else if (exp < 0) {
 	}
@@ -1300,7 +1300,17 @@ bool Guild::ChangeMemberFlag(Client *client, int8 member_flag, int8 value, bool 
 
 	return ret;
 }
-
+bool Guild::UpdateGuildStatus(Player *player ,int32 Status) {
+	GuildMember *gm;
+	assert(player);
+	assert(members.count(player->GetCharacterID()) > 0);
+	mMembers.readlock(__FUNCTION__, __LINE__);
+	gm = members[player->GetCharacterID()];
+	gm->guild_status += Status;
+	mMembers.releasereadlock(__FUNCTION__, __LINE__);
+	member_save_needed = true;
+	return true;
+}
 bool Guild::UpdateGuildMemberInfo(Player *player) {
 
 	GuildMember *gm;
@@ -1315,7 +1325,7 @@ bool Guild::UpdateGuildMemberInfo(Player *player) {
 	gm->adventure_class = player->GetAdventureClass();
 	gm->adventure_level = player->GetLevel();
 	gm->tradeskill_class = player->GetTradeskillClass();
-	gm->tradeskill_level = 0;
+	gm->tradeskill_level = player->GetTSLevel();
 	gm->zone = string(player->GetZone()->GetZoneDescription());
 	gm->last_login_date = database.GetCharacterTimeStamp(player->GetCharacterID());
 	mMembers.releasereadlock(__FUNCTION__, __LINE__);

@@ -32,8 +32,8 @@ using namespace std;
 
 #ifdef WIN32
 #include <process.h>
+#include <WinSock2.h>
 #include <windows.h>
-#include <winsock.h>
 
 #define snprintf	_snprintf
 #define vsnprintf	_vsnprintf
@@ -562,7 +562,7 @@ void LoginServer::ProcessTableUpdate(uchar* data) {
 
 int32 LoginServer::ProcessTableUpdates(uchar* data) {
 	int32 ret = 0;
-	LatestTableVersions table_versions;
+	/*LatestTableVersions table_versions;
 	table_versions.DeSerialize(data);
 	int32 total_tables = table_versions.GetTotalTables();
 	
@@ -601,13 +601,13 @@ int32 LoginServer::ProcessTableUpdates(uchar* data) {
 		}
 		SendPacket(outpack);
 		safe_delete(outpack);
-	}
+	}*/
 	return ret;
 }
 
 int32 LoginServer::ProcessDataUpdates(uchar* data) {
 	int32 ret = 0;
-	LatestTableVersions table_versions;
+	/*LatestTableVersions table_versions;
 	table_versions.DeSerialize(data);
 	int32 total_tables = table_versions.GetTotalTables();
 	vector<ServerPacket*> packet_requests;
@@ -646,7 +646,7 @@ int32 LoginServer::ProcessDataUpdates(uchar* data) {
 		}
 		SendPacket(outpack);
 		safe_delete(outpack);
-	}
+	}*/
 	return ret;
 }
 

@@ -77,6 +77,8 @@ int16 GetItemPacketType(int32 version);
 ///<summary>Gets the opcode version_range1 from the clients version</summary>
 ///<param name='version'>The client version</param>
 int16 GetOpcodeVersion(int16 version);
+void SleepMS(int32 milliseconds);
+size_t strlcpy(char *dst, const char *src, size_t size);
 
 bool INIReadBool(FILE *f, const char *section, const char *property, bool *out);
 bool INIReadInt(FILE *f, const char *section, const char *property, int *out);

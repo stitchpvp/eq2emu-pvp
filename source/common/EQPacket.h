@@ -26,7 +26,7 @@
 
 #ifdef WIN32
 	#include <time.h>
-	#include <winsock.h>
+	#include <WinSock2.h>
 #else
 	#include <sys/time.h>
 	#include <netinet/in.h>

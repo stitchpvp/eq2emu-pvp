@@ -22,7 +22,7 @@
 #include <iostream>
 using namespace std;
 #include <errmsg.h>
-#include <mysqld_error.h>
+//#include <mysqld_error.h>
 #include <limits.h>
 #include "dbcore.h"
 #include <string.h>

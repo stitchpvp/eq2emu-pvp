@@ -25,7 +25,7 @@ using namespace std;
 #include <stdlib.h>
 #include <string.h>
 #include <errmsg.h>
-#include <mysqld_error.h>
+//#include <mysqld_error.h>
 #include <limits.h>
 #include <ctype.h>
 #include <assert.h>
@@ -33,6 +33,7 @@ using namespace std;
 
 // Disgrace: for windows compile
 #ifdef WIN32
+#include <WinSock2.h>
 #include <windows.h>
 #define snprintf	_snprintf
 #define strncasecmp	_strnicmp
