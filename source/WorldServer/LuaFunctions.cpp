@@ -7397,17 +7397,13 @@ int EQ2Emu_lua_SetSpellSnareValue(lua_State* state) {
 	float snare = lua_interface->GetFloatValue(state);
 	Spawn* spawn = lua_interface->GetSpawn(state, 2);
 
-	// convert the val to the speed multipler value (100 - val)
-	float val = 100.0 - snare;
-	val /= 100.0;
-
 	if (spawn) {
 		if (!spawn->IsEntity()) {
 			lua_interface->LogError("LUA SetSpellSnareValue command error: spawn must be an entity.");
 			return 0;
 		}
 
-		static_cast<Entity*>(spawn)->SetSnareValue(spell, val);
+		static_cast<Entity*>(spawn)->SetSnareValue(spell, snare);
 	}
 
 	return 0;

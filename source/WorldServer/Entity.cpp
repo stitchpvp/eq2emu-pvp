@@ -1350,6 +1350,7 @@ float Entity::GetSpeed() {
 		ret += max(stats[ITEM_STAT_SPEED], stats[ITEM_STAT_MOUNTSPEED]);
 
 	ret *= speed_multiplier;
+	ret -= GetHighestSnare();
 	return ret;
 }
 
@@ -1769,10 +1770,8 @@ void Entity::RemoveRootSpell(LuaSpell* spell) {
 		if (IsPlayer()){
 			if (!IsMezzedOrStunned())
 				((Player*)this)->SetPlayerControlFlag(1, 8, false); // heading movement only
-		}
-		else {
-			// GetHighestSnare() will return 1.0f if no snares returning the spawn to full speed
-			SetSpeedMultiplier(GetHighestSnare());
+		} else {
+			SetSpeedMultiplier(1.0f);
 		}
 	}
 }
@@ -1815,11 +1814,6 @@ void Entity::AddSnareSpell(LuaSpell* spell) {
 		control_effects[CONTROL_EFFECT_TYPE_SNARE] = new MutexList<LuaSpell*>;
 
 	control_effects[CONTROL_EFFECT_TYPE_SNARE]->Add(spell);
-
-	// Don't set speed multiplier if there is a root or no snare values
-	MutexList<LuaSpell*>* roots = control_effects[CONTROL_EFFECT_TYPE_ROOT];
-	if ((!roots || roots->size(true) == 0) && snare_values.size() > 0)
-		SetSpeedMultiplier(GetHighestSnare());
 }
 
 void Entity::RemoveSnareSpell(LuaSpell* spell) {
@@ -1829,16 +1823,6 @@ void Entity::RemoveSnareSpell(LuaSpell* spell) {
 
 	snare_list->Remove(spell);
 	snare_values.erase(spell);
-
-	//LogWrite(PLAYER__ERROR, 0, "Debug", "snare_values.size() = %u", snare_values.size());
-
-	// only change speeds if there are no roots
-	MutexList<LuaSpell*>* roots = control_effects[CONTROL_EFFECT_TYPE_ROOT];
-	if (!roots || roots->size(true) == 0) {
-		float multiplier = GetHighestSnare();
-		//LogWrite(PLAYER__ERROR, 0, "Debug", "GetHighestSnare() = %f", multiplier);
-		SetSpeedMultiplier(multiplier);
-	}
 }
 
 void Entity::SetSnareValue(LuaSpell* spell, float snare_val) {
@@ -1850,14 +1834,14 @@ void Entity::SetSnareValue(LuaSpell* spell, float snare_val) {
 
 float Entity::GetHighestSnare() {
 	// For simplicity this will return the highest snare value, which is actually the lowest value
-	float ret = 1.0f;
+	float ret = 0.0f;
 
 	if (snare_values.size() == 0)
 		return ret;
 
 	map<LuaSpell*, float>::iterator itr;
 	for (itr = snare_values.begin(); itr != snare_values.end(); itr++) {
-		if (itr->second < ret)
+		if (itr->second > ret)
 			ret = itr->second;
 	}
 

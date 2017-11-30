@@ -204,15 +204,11 @@ void NPC::InCombat(bool val){
 		SetTempActionState(0); // disable action states in combat
 	}
 	in_combat = val;
-	if(val){
+	if (val) {
 		LogWrite(NPC__DEBUG, 3, "NPC", "'%s' engaged in combat with '%s'", this->GetName(), ( GetTarget() ) ? GetTarget()->GetName() : "Unknown" );
 		SetLockedNoLoot(3);
 		AddIconValue(64);
-		// In combat so lets set the NPC's speed to its max speed
-		if (GetMaxSpeed() > 0)
-			SetSpeed(GetMaxSpeed());
-	}
-	else{
+	} else {
 		SetLockedNoLoot(1);
 		RemoveIconValue(64);
 		if (GetHP() > 0){
@@ -222,7 +218,7 @@ void NPC::InCombat(bool val){
 			GetZone()->GetSpellProcess()->KillHOBySpawnID(GetID());
 		}
 	}
-	if(!MovementInterrupted() && val && GetSpeed() > 0 && movement_loop.size() > 0){
+	if(!MovementInterrupted() && val && movement_loop.size() > 0){
 		CalculateRunningLocation(true);
 	}
 	if(val){

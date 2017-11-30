@@ -2140,7 +2140,7 @@ bool Spawn::CalculateChange(){
 			//float test_vector=sqrtf (data->x*data->x + data->y*data->y + data->z*data->z);
 			// Goto http://www.eq2emulator.net/phpBB3/viewtopic.php?f=13&t=3180#p24256
 			// for detailed info on how I got the speed equation (1.1043506061 * GetSpeed() + 0.1832966667)
-			float tar_vector = (1.1043506061 * GetSpeed() + 0.1832966667) / sqrtf (tar_vx*tar_vx + tar_vy*tar_vy + tar_vz*tar_vz);
+			float tar_vector = (1.1043506061 * (GetSpeed() < 0 ? (100 - GetSpeed()) / 100.0 : GetSpeed()) + 0.1832966667) / sqrtf (tar_vx*tar_vx + tar_vy*tar_vy + tar_vz*tar_vz);
 
 			// Distance less then 0.5 just set the npc to the target location
 			if (GetDistance(data->x, data->y, data->z, IsWidget() ? false : true) <= 0.5f) {
