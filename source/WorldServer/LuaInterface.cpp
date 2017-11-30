@@ -1183,7 +1183,7 @@ ZoneServer* LuaInterface::GetZone(lua_State* state, int8 arg_num) {
 sint32 LuaInterface::GetSInt32Value(lua_State* state, int8 arg_num) {
 	sint32 val = 0;
 	if(lua_isnumber(state, arg_num)){
-		val = lua_tointeger(state, arg_num);
+		val = lua_tonumber(state, arg_num);
 	}
 	return val;
 }
