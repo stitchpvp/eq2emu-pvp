@@ -1291,6 +1291,27 @@ bool SpellProcess::CastProcessedSpell(LuaSpell* spell, bool passive) {
 
 				if (target->IsNPC())
 					((NPC*)target)->AddHate(spell->caster, 1);
+			} else if (spell->spell->GetSpellData()->group_spell) {
+				GroupMemberInfo* gmi = spell->caster->GetGroupMemberInfo();
+				bool in_group = false;
+
+				if (gmi) {
+					world.GetGroupManager()->GroupLock(__FUNCTION__, __LINE__);
+
+					deque<GroupMemberInfo*>::iterator itr;
+					deque<GroupMemberInfo*>* members = world.GetGroupManager()->GetGroupMembers(gmi->group_id);
+					for (itr = members->begin(); itr != members->end(); itr++) {
+						if ((*itr)->member == target) {
+							in_group = true;
+							break;
+						}
+					}
+
+					world.GetGroupManager()->ReleaseGroupLock(__FUNCTION__, __LINE__);
+				}
+
+				if (!in_group && spell->caster != target)
+					continue;
 			}
 
 			if (spell->spell->GetSpellData()->friendly_spell || hit_result == DAMAGE_PACKET_RESULT_SUCCESSFUL) {
@@ -1676,6 +1697,10 @@ void SpellProcess::RemoveSpellTimersFromSpawn(Spawn* spawn, bool remove_all, boo
 				continue;
 			if (spell->spell->GetSpellData()->persist_though_death && spell->caster->GetZone()->GetClientBySpawn(spell->caster)->IsConnected())
 				continue;
+			if (spell->caster == spawn && spell->spell->GetSpellData()->friendly_spell && spell->spell->GetSpellData()->target_type == SPELL_TARGET_OTHER && !spell->spell->GetSpellData()->affect_only_group_members) {
+				spell->caster = spell->caster->GetZone()->unknown_spawn;
+				continue;
+			}
 			if(spell->caster == spawn){
 				DeleteCasterSpell(spell);
 				continue;
@@ -2157,8 +2182,10 @@ void SpellProcess::CheckRemoveTargetFromSpell(LuaSpell* spell, bool allow_delete
 							for (target_itr = targets->begin(); target_itr != targets->end(); target_itr++){
 								if (remove_spawn->GetID() == (*target_itr)){
 									targets->erase(target_itr);
-									if (remove_spawn->IsEntity())
+									if (remove_spawn->IsEntity()) {
+										static_cast<Entity*>(remove_spawn)->RemoveEffectsFromLuaSpell(spell);
 										lua_interface->RemoveSpell(spell, remove_spawn, true, false);
+									}
 									break;
 								}
 							}

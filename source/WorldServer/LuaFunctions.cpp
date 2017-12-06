@@ -844,13 +844,19 @@ int EQ2Emu_lua_SpellHeal(lua_State* state){
 int EQ2Emu_lua_SummonItem(lua_State* state){
 	if(!lua_interface)
 		return 0;
+
 	Spawn* spawn = lua_interface->GetSpawn(state);
 	int32 item_id = lua_interface->GetInt32Value(state, 2);
-	bool send_messages = (lua_interface->GetInt8Value(state, 3) == 1);
+	int8 quantity = lua_interface->GetInt8Value(state, 3);
+	bool send_messages = (lua_interface->GetInt8Value(state, 4) == 1);
+
+	if (quantity == 0)
+		quantity = 1;
+
 	if (spawn && spawn->IsPlayer()){
 		Client* client = spawn->GetZone()->GetClientBySpawn(spawn);
 		if (client && item_id > 0){
-			lua_interface->SetBooleanValue(state, client->AddItem(item_id, 1));
+			lua_interface->SetBooleanValue(state, client->AddItem(item_id, quantity));
 			if (send_messages) {
 				Item* item = master_item_list.GetItem(item_id);
 				if (item) {

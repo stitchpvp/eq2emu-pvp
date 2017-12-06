@@ -218,6 +218,9 @@ void ZoneServer::Init()
 	spellProcess = new SpellProcess();
 	tradeskillMgr = new TradeskillMgr();
 
+	unknown_spawn = new Entity();
+	AddSpawn(unknown_spawn);
+
 	/* Dynamic Timers */
 	regenTimer.Start(rule_manager.GetGlobalRule(R_Zone, RegenTimer)->GetInt32());
 	client_save.Start(rule_manager.GetGlobalRule(R_Zone, ClientSaveTimer)->GetInt32());

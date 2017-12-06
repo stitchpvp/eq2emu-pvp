@@ -208,6 +208,9 @@ void NPC::InCombat(bool val){
 		LogWrite(NPC__DEBUG, 3, "NPC", "'%s' engaged in combat with '%s'", this->GetName(), ( GetTarget() ) ? GetTarget()->GetName() : "Unknown" );
 		SetLockedNoLoot(3);
 		AddIconValue(64);
+
+		if (GetMaxSpeed() > 0)
+			SetSpeed(GetMaxSpeed());
 	} else {
 		SetLockedNoLoot(1);
 		RemoveIconValue(64);

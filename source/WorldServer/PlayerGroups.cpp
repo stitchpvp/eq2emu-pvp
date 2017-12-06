@@ -397,59 +397,73 @@ void PlayerGroupManager::ClearPendingInvite(Entity* member) {
 }
 
 void PlayerGroupManager::RemoveGroupBuffs(int32 group_id, Client* client) {
-	SpellEffects* se = 0;
-	Spell* spell = 0;
-	LuaSpell* luaspell = 0;
-	EQ2Packet* packet = 0;
-	Entity* pet = 0;
-	Player* player = 0;
-	Entity* charmed_pet = 0;
-	PlayerGroup* group = 0;
+	PlayerGroup* group = nullptr;
+	map<Player*, vector<LuaSpell*>> to_remove;
 
 	MGroups.readlock(__FUNCTION__, __LINE__);
 	if (m_groups.count(group_id) > 0)
 		group = m_groups[group_id];
 
 	if (group && client) {
-		/* first remove all spell effects this group member has on them from other group members */
-		player = client->GetPlayer();
-		se = player->GetSpellEffects();
+		Player* player = client->GetPlayer();
+		SpellEffects *se = player->GetSpellEffects();
+
 		for (int i = 0; i < NUM_SPELL_EFFECTS; i++) {
 			if (se[i].spell_id != 0xFFFFFFFF) {
-				//If the client is the caster, don't remove the spell
-				if (se[i].caster == player)
-					continue;
+				LuaSpell* luaspell = se[i].spell;
+				Spell* spell = luaspell->spell;
 
-				luaspell = se[i].spell;
-				spell = luaspell->spell;
-				/* is this a friendly group spell? */
 				if (spell && spell->GetSpellData()->group_spell && spell->GetSpellData()->friendly_spell) {
-					//Remove all group buffs not cast by this player
-					player->RemoveSpellEffect(luaspell);
-					player->RemoveSpellBonus(luaspell);
-					player->RemoveSkillBonus(spell->GetSpellID());
+					if (luaspell->caster == player) {
+						deque<GroupMemberInfo*>* members = group->GetMembers();
+						deque<GroupMemberInfo*>::iterator itr;
+						for (itr = members->begin(); itr != members->end(); itr++) {
+							GroupMemberInfo* info = *itr;
 
-					//Also remove group buffs from pets
-					pet = 0;
-					charmed_pet = 0;
-					if (player->HasPet()){
-						pet = player->GetPet();
-						charmed_pet = player->GetCharmedPet();
-					}
-					if (pet){
-						pet->RemoveSpellEffect(luaspell);
-						pet->RemoveSpellBonus(luaspell);
-					}
-					if (charmed_pet){
-						charmed_pet->RemoveSpellEffect(luaspell);
-						charmed_pet->RemoveSpellBonus(luaspell);
+							if (info->client == client || info->client->GetCurrentZone() != client->GetCurrentZone())
+								continue;
+
+							to_remove[info->client->GetPlayer()].push_back(luaspell);
+						}
+					} else {
+						to_remove[player].push_back(luaspell);
 					}
 				}
 			}
 		}
-		packet = client->GetPlayer()->GetSkills()->GetSkillPacket(client->GetVersion());
-		if (packet)
-			client->QueuePacket(packet);
+
+		for (auto const& remove : to_remove) {
+			Player* target = remove.first;
+			vector<LuaSpell*> effects = remove.second;
+
+			for (auto const& effect : effects) {
+				target->RemoveSpellEffect(effect);
+				target->RemoveSpellBonus(effect);
+				target->RemoveSkillBonus(effect->spell->GetSpellID());
+
+				Entity* pet = nullptr;
+				Entity* charmed_pet = nullptr;
+
+				if (target->HasPet()) {
+					pet = target->GetPet();
+					charmed_pet = target->GetCharmedPet();
+				}
+
+				if (pet) {
+					pet->RemoveSpellEffect(effect);
+					pet->RemoveSpellBonus(effect);
+				}
+
+				if (charmed_pet) {
+					charmed_pet->RemoveSpellEffect(effect);
+					charmed_pet->RemoveSpellBonus(effect);
+				}
+			}
+
+			EQ2Packet* packet = target->GetSkills()->GetSkillPacket(client->GetVersion());
+			if (packet)
+				target->GetZone()->GetClientBySpawn(target)->QueuePacket(packet);
+		}
 	}
 	MGroups.releasereadlock(__FUNCTION__, __LINE__);
 }

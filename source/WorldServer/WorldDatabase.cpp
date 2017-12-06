@@ -184,6 +184,9 @@ void WorldDatabase::LoadCharacterActiveSpells(Player* player) {
 			Player* caster = player->GetZone()->GetPlayerByID(caster_id);
 			Player* target = player->GetZone()->GetPlayerByID(target_id);
 
+			if (!target)
+				continue;
+
 			lua_spell->caster = caster;
 			lua_spell->initial_target = target->GetID();
 			lua_spell->spell = spell;
@@ -240,6 +243,9 @@ void WorldDatabase::SavePlayerActiveSpells(Client* client) {
 			Spawn* caster = lua_spell->caster;
 			Spawn* target = client->GetCurrentZone()->GetSpawnByID(lua_spell->initial_target);
 
+			if (caster == client->GetCurrentZone()->unknown_spawn)
+				caster = target;
+			
 			if (caster->IsPlayer() && target->IsPlayer()) {
 				query.RunQuery2(Q_INSERT, "INSERT INTO character_active_spells (character_id, target_character_id, spell_id, spell_tier) VALUES (%u, %u, %u, %u) ON DUPLICATE KEY UPDATE character_id = character_id", ((Player*)caster)->GetCharacterID(), ((Player*)target)->GetCharacterID(), lua_spell->spell->GetSpellID(), lua_spell->spell->GetSpellTier());
 			}

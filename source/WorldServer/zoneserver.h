@@ -592,7 +592,7 @@ public:
 	int32 GetFlightPathIndex(int32 id);
 	float GetFlightPathSpeed(int32 id);
 
-
+	Entity* unknown_spawn;
 
 
 private:
