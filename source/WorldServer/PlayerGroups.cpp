@@ -131,7 +131,7 @@ void PlayerGroup::GroupChatMessage(Spawn* from, const char* message) {
 	for(itr = m_members.begin(); itr != m_members.end(); itr++) {
 		GroupMemberInfo* info = *itr;
 		if(info->client && info->client->GetCurrentZone())
-			info->client->GetCurrentZone()->HandleChatMessage(info->client, from, 0, CHANNEL_GROUP_CHAT, message, 0);
+			info->client->GetCurrentZone()->HandleChatMessage(info->client, from, 0, CHANNEL_GROUP_SAY, message, 0);
 	}
 }
 
