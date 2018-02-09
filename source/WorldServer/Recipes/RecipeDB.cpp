@@ -18,7 +18,7 @@
     along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 */
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
 	#include <windows.h>
 #endif
 #include <mysql.h>
@@ -149,7 +149,9 @@ void WorldDatabase::LoadPlayerRecipes(Player *player){
 	}
 }
 
-int32 WorldDatabase::LoadPlayerRecipeBooks(int32 char_id, Player *player){
+int32 WorldDatabase::LoadPlayerRecipeBooks(int32 char_id, Player *player) {
+	assert(player);
+
 	LogWrite(TRADESKILL__DEBUG, 0, "Recipes", "Loading Character Recipe Books for player '%s' ...", player->GetName());
 	Query query;
 	MYSQL_ROW row;
@@ -158,7 +160,6 @@ int32 WorldDatabase::LoadPlayerRecipeBooks(int32 char_id, Player *player){
 	int32 old_id = 0;
 	int32 new_id = 0;
 	Recipe* recipe;
-	assert(player);
 
 	res = query.RunQuery2(Q_SELECT, "SELECT recipebook_id FROM character_recipe_books WHERE char_id = %u", char_id);
 	if (res && mysql_num_rows(res) > 0) {

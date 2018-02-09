@@ -103,7 +103,7 @@ public:
 	void	SetEquipmentListID(int32 id);
 	int32	GetEquipmentListID();
 	Spell*	GetNextSpell(float distance);
-	Spell*	GetNextBuffSpell();
+	virtual Spell*	GetNextBuffSpell();
 	void	SetAggroRadius(float radius);
 	float	GetAggroRadius();
 	void	SetCastPercentage(int8 percentage);

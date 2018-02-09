@@ -22,7 +22,7 @@
 #include <iostream>
 using namespace std;
 #include <errmsg.h>
-#include <mysqld_error.h>
+//#include <mysqld_error.h>
 #include <limits.h>
 #include "dbcore.h"
 #include <string.h>
@@ -51,6 +51,7 @@ using namespace std;
 DBcore::DBcore() {
 	mysql_init(&mysql);
 	pHost = 0;
+	pPort = 0;
 	pUser = 0;
 	pPassword = 0;
 	pDatabase = 0;

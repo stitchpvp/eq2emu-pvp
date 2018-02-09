@@ -172,6 +172,8 @@ public:
 	void MakeLeader(int32 group_id, Entity* new_leader);
 	void UpdateGroupBuffs();
 
+	bool IsInGroup(int32 group_id, Entity* member);
+
 	// TODO: Any function below this comment
 	bool IsSpawnInGroup(int32 group_id, string name); // used in follow
 	Player* GetGroupLeader(int32 group_id);

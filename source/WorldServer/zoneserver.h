@@ -47,6 +47,7 @@
 extern NetConnection net;		// needs to be here or compile errors in commands.cpp
 class SpellProcess;
 class TradeskillMgr;
+class Bot;
 
 #define EXPANSION_UNKNOWN	1
 #define EXPANSION_UNKNOWN2	64
@@ -111,6 +112,9 @@ class TradeskillMgr;
 #define WAYPOINT_CATEGORY_TRACKING		6
 #define WAYPOINT_CATEGORY_HOUSES		7
 #define WAYPOINT_CATEGORY_MAP			8
+
+#define ZONE_FLAGS_BASE 25191534
+#define ZONE_FLAGS_PVP 262144
 
 struct PlayerProximity{
 	float				distance;
@@ -217,6 +221,8 @@ struct FlightPathLocation {
 	float	Z;
 };
 
+class SPGrid;
+
 // need to attempt to clean this up and add xml comments, remove unused code, find a logical way to sort the functions maybe by get/set/process/add etc...
 class ZoneServer {
 public:
@@ -253,7 +259,7 @@ public:
 	Sign*	AddSignSpawn(SpawnLocation* spawnlocation, SpawnEntry* spawnentry);
 	void	AddSpawn(Spawn* spawn);
 	void	RemoveDeadEnemyList(Spawn* spawn);
-	void	RemoveDeadSpawn(Spawn* spawn);
+	void	RemoveDeadSpawn(Spawn* spawn, bool immediate = false);
 	
 	void	AddSpawnGroupLocation(int32 group_id, int32 location_id, int32 spawn_location_id);
 	void	AddSpawnGroupAssociation(int32 group_id1, int32 group_id2);
@@ -261,7 +267,7 @@ public:
 	void	AddSpawnGroupChance(int32 group_id, float percent);
 	
 	void	RemoveSpawn(Spawn* spawn, bool delete_spawn = true, bool respawn = true, bool lock = true);
-	void RemoveSpawnFromClient(Spawn* spawn);
+	void RemoveSpawnFromClient(Spawn* spawn, bool skip_if_client = true);
 	void	ProcessSpawnLocations();
 	void	SendQuestUpdates(Client* client, Spawn* spawn = 0);
 	
@@ -289,13 +295,15 @@ public:
 	void	UpdateVitality(float amount);
 	
 	vector<Entity*> GetPlayers();
+
+	Player * GetPlayerByID(int32 id);
 	
 	void	KillSpawn(Spawn* dead, Spawn* killer, bool send_packet = true, int8 damage_type = 0, int16 kill_blow_type = 0);
 	
 	void	SendDamagePacket(Spawn* attacker, Spawn* victim, int8 type1, int8 type2, int8 damage_type, int16 damage, const char* spell_name);
 	void    SendHealPacket(Spawn* caster, Spawn* target, int16 type, int32 heal_amt, const char* spell_name);
 	
-	void	SendCastSpellPacket(LuaSpell* spell, Entity* caster);
+	void	SendCastSpellPacket(LuaSpell* spell, Entity* caster, int16 cast_time);
 	void	SendCastSpellPacket(int32 spell_visual, Spawn* target, Spawn* caster = 0);
 	void	SendCastEntityCommandPacket(EntityCommand* entity_command, int32 spawn_id, int32 target_id);
 	void	TriggerCharSheetTimer();
@@ -397,6 +405,8 @@ public:
 	void SendUpdateDefaultCommand(Spawn* spawn, const char* command, float distance);
 
 	map<int32, int32>* GetSpawnLocationsByGroup(int32 group_id);
+
+	SPGrid* Grid;
 
 	/****************************************************
 	Following functions are only used for LUA commands
@@ -586,8 +596,9 @@ public:
 	int32 GetFlightPathIndex(int32 id);
 	float GetFlightPathSpeed(int32 id);
 
+	Entity* unknown_spawn;
 
-
+	void	SendSpawn(Spawn* spawn, Client* client);														// moved from private to public for bots
 
 private:
 	/* Private Functions */
@@ -609,7 +620,6 @@ private:
 	vector<int32>*	GetAssociatedLocations(set<int32>* groups);											// never used outside zone server
 	set<int32>* GetAssociatedGroups(int32 group_id);														// never used outside zone server
 	list<int32>* GetSpawnGroupsByLocation(int32 location_id);												// never used outside zone server
-	void	SendSpawn(Spawn* spawn, Client* client);														// never used outside zone server
 	void	ProcessSpawnLocation(int32 location_id, bool respawn = false);										// never used outside zone server
 	Spawn*	ProcessSpawnLocation(SpawnLocation* spawnlocation, bool respawn = false);							// never used outside zone server
 	Spawn*	ProcessInstanceSpawnLocation(SpawnLocation* spawnlocation, map<int32,int32>* instNPCs, map<int32,int32>* instGroundSpawns, map<int32,int32>* instObjSpawns, map<int32,int32>* instWidgetSpawns, map<int32,int32>* instSignSpawns, bool respawn = false);													// never used outside zone server
@@ -792,7 +802,7 @@ private:
 	float	safe_z;
 	float	safe_heading;
 	float	xp_mod;
-	int32	zoneID;
+	volatile int32	zoneID;
 	bool	locked;	// JA: implementing /zone lock|unlock commands
 	int32	instanceID;
 	string	zone_motd;

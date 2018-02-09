@@ -81,6 +81,7 @@ struct CharFeatures{
 	sint8				chin_type[3];
 	sint8				nose_type[3];
 	sint8				body_size;
+	sint8				body_age;
 	sint8				soga_eye_type[3];
 	sint8				soga_ear_type[3];
 	sint8				soga_eye_brow_type[3];
@@ -156,6 +157,7 @@ struct AppearanceData {
 	int16			model_type;
 	int16			soga_model_type;
 	int16			activity_status;
+	int32			activity_timer;
 	int16			visual_state;
 	int16			action_state;
 	int16			mood_state;

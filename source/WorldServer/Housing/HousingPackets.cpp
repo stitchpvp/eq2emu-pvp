@@ -112,15 +112,17 @@ void ClientPacketFunctions::SendHouseVisitWindow(Client* client, vector<PlayerHo
 		int16 i = 0;
 		for (itr = houses.begin(); itr != houses.end(); itr++) {
 			PlayerHouse* ph = *itr;
-			HouseZone* hz = world.GetHouseZone(ph->house_id);
-			if (ph && hz) {
-				packet->setArrayDataByName("house_id", ph->unique_id, i);
-				packet->setArrayDataByName("house_owner", ph->player_name.c_str(), i);
-				packet->setArrayDataByName("house_location", hz->name.c_str(), i);
-				packet->setArrayDataByName("house_zone", client->GetCurrentZone()->GetZoneName(), i);
-				packet->setArrayDataByName("access_level", 1, i);
-				packet->setArrayDataByName("visit_flag", 0, i); // 0 = allowed to visit, 1 = owner hasn't paid upkeep
-				i++;
+			if (ph) {
+				HouseZone* hz = world.GetHouseZone(ph->house_id);
+				if (hz) {
+					packet->setArrayDataByName("house_id", ph->unique_id, i);
+					packet->setArrayDataByName("house_owner", ph->player_name.c_str(), i);
+					packet->setArrayDataByName("house_location", hz->name.c_str(), i);
+					packet->setArrayDataByName("house_zone", client->GetCurrentZone()->GetZoneName(), i);
+					packet->setArrayDataByName("access_level", 1, i);
+					packet->setArrayDataByName("visit_flag", 0, i); // 0 = allowed to visit, 1 = owner hasn't paid upkeep
+					i++;
+				}
 			}
 		}
 		client->QueuePacket(packet->serialize());

@@ -363,6 +363,7 @@ LinkedList<TYPE>::LinkedList()
 	list_destructor_invoked = false;
 	first = 0;
 	count = 0;
+	dont_delete = false;
 }
 
 template<class TYPE>

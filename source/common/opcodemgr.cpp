@@ -146,6 +146,8 @@ RegularOpcodeManager::RegularOpcodeManager()
 {
 	emu_to_eq = NULL;
 	eq_to_emu = NULL;
+	EQOpcodeCount = 0;
+	EmuOpcodeCount = 0;
 }
 
 RegularOpcodeManager::~RegularOpcodeManager() {
@@ -199,7 +201,7 @@ bool RegularOpcodeManager::ReloadOpcodes(const char *filename) {
 	s.it = this;
 	MOpcodes.lock();
 	
-	memset(eq_to_emu, 0, sizeof(uint16)*MAX_EQ_OPCODE);
+	memset(eq_to_emu, 0, sizeof(EmuOpcode)*MAX_EQ_OPCODE);
 	
 	bool ret = LoadOpcodesFile(filename, &s);
 	

@@ -129,7 +129,7 @@ bool DatabaseNew::Query(const char *query, ...) {
 	size_t size = QUERY_INITIAL_SIZE;
 	int num_chars;
 	va_list args;
-	bool ret;
+	bool ret = true;
 
 	MMysql.writelock(__FUNCTION__, __LINE__);
 	while (true) {
@@ -154,9 +154,12 @@ bool DatabaseNew::Query(const char *query, ...) {
 		free(buf);
 	}
 
-	ret = (mysql_real_query(&mysql, buf, (unsigned long)num_chars) == 0);
-	if (!ret)
-		LogWrite(DATABASE__ERROR, 0, "Database", "Error %i running MySQL query: %s\n%s\n", mysql_errno(&mysql), mysql_error(&mysql), buf);
+	if (mysql_real_query(&mysql, buf, (unsigned long)num_chars) != 0) {
+		if (!IsIgnoredErrno(mysql_errno(&mysql))) {
+			LogWrite(DATABASE__ERROR, 0, "Database", "Error %i running MySQL query: %s\n%s\n", mysql_errno(&mysql), mysql_error(&mysql), buf);
+			ret = false;
+		}
+	}
 	free(buf);
 
 	MMysql.releasewritelock(__FUNCTION__, __LINE__);
@@ -169,7 +172,7 @@ bool DatabaseNew::Select(DatabaseResult *result, const char *query, ...) {
 	int num_chars;
 	va_list args;
 	MYSQL_RES *res;
-	bool ret;
+	bool ret = true;
 
 	MMysql.writelock(__FUNCTION__, __LINE__);
 	while (true) {
@@ -194,13 +197,25 @@ bool DatabaseNew::Select(DatabaseResult *result, const char *query, ...) {
 		free(buf);
 	}
 
-	ret = (mysql_real_query(&mysql, buf, (unsigned long)num_chars) == 0);
-	if (!ret)
-		LogWrite(DATABASE__ERROR, 0, "Database", "Error %i running MySQL query: %s\n%s\n", mysql_errno(&mysql), mysql_error(&mysql), buf);
-	free(buf);
+	if (mysql_real_query(&mysql, buf, (unsigned long)num_chars) != 0) {
+		if (!IsIgnoredErrno(mysql_errno(&mysql))) {
+			LogWrite(DATABASE__ERROR, 0, "Database", "Error %i running MySQL query: %s\n%s\n", mysql_errno(&mysql), mysql_error(&mysql), buf);
+			ret = false;
+		}
+	}
 
-	if (ret && (res = mysql_store_result(&mysql)) != NULL)
-		ret = result->StoreResult(res);
+	if (ret && !IsIgnoredErrno(mysql_errno(&mysql))) {
+		res = mysql_store_result(&mysql);
+
+		if (res != NULL)
+			ret = result->StoreResult(res);
+		else {
+			LogWrite(DATABASE__ERROR, 0, "Database", "Error storing MySql query result (%d): %s\n%s", mysql_errno(&mysql), mysql_error(&mysql), buf);
+			ret = false;
+		}
+	}
+
+	free(buf);
 
 	MMysql.releasewritelock(__FUNCTION__, __LINE__);
 	return ret;
@@ -254,4 +269,100 @@ string DatabaseNew::EscapeStr(const char *str) {
 
 string DatabaseNew::EscapeStr(string str) {
 	return EscapeStr(str.c_str(), str.length());
+}
+
+bool DatabaseNew::QueriesFromFile(const char * file) {
+	bool success = true;
+	long size;
+	char *buf;
+	int ret;
+	MYSQL_RES *res;
+	FILE *f;
+
+	f = fopen(file, "rb");
+	if (f == NULL) {
+		LogWrite(DATABASE__ERROR, 0, "Database", "Unable to open '%s' for reading: %s", file, strerror(errno));
+		return false;
+	}
+
+	fseek(f, 0, SEEK_END);
+	size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	buf = (char *)malloc(size + 1);
+	if (buf == NULL) {
+		fclose(f);
+		LogWrite(DATABASE__ERROR, 0, "Database", "Out of memory trying to allocate %u bytes in %s:%u\n", size + 1, __FUNCTION__, __LINE__);
+		return false;
+	}
+
+	if (fread(buf, sizeof(*buf), size, f) != (size_t)size) {
+		LogWrite(DATABASE__ERROR, 0, "Database", "Failed to read from '%s': %s", file, strerror(errno));
+		fclose(f);
+		free(buf);
+		return false;
+	}
+
+	buf[size] = '\0';
+	fclose(f);
+
+	mysql_set_server_option(&mysql, MYSQL_OPTION_MULTI_STATEMENTS_ON);
+	ret = mysql_real_query(&mysql, buf, size);
+	free(buf);
+
+	if (ret != 0) {
+		LogWrite(DATABASE__ERROR, 0, "Database", "Error running MySQL queries from file '%s' (%d): %s", file, mysql_errno(&mysql), mysql_error(&mysql));
+		success = false;
+	}
+	else {
+		//all results must be processed
+		do {
+			res = mysql_store_result(&mysql);
+			if (res != NULL)
+				mysql_free_result(res);
+			ret = mysql_next_result(&mysql);
+
+			if (ret > 0) {
+				LogWrite(DATABASE__ERROR, 0, "Database", "Error running MySQL queries from file '%s' (%d): %s", file, mysql_errno(&mysql), mysql_error(&mysql));
+				success = false;
+			}
+
+		} while (ret == 0);
+	}
+	mysql_set_server_option(&mysql, MYSQL_OPTION_MULTI_STATEMENTS_OFF);
+
+	return success;
+}
+
+void DatabaseNew::SetIgnoredErrno(unsigned int db_errno) {
+	vector<unsigned int>::iterator itr;
+
+	for (itr = ignored_errnos.begin(); itr != ignored_errnos.end(); itr++) {
+		if ((*itr) == db_errno)
+			return;
+	}
+
+	ignored_errnos.push_back(db_errno);
+}
+
+void DatabaseNew::RemoveIgnoredErrno(unsigned int db_errno) {
+	vector<unsigned int>::iterator itr;
+
+	for (itr = ignored_errnos.begin(); itr != ignored_errnos.end(); itr++) {
+		if ((*itr) == db_errno) {
+			ignored_errnos.erase(itr);
+			break;
+		}
+	}
+}
+
+bool DatabaseNew::IsIgnoredErrno(unsigned int db_errno) {
+	vector<unsigned int>::iterator itr;
+
+	for (itr = ignored_errnos.begin(); itr != ignored_errnos.end(); itr++) {
+		if ((*itr) == db_errno)
+			return true;
+	}
+
+	return false;
 }

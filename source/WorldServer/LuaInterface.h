@@ -27,11 +27,7 @@
 #include "zoneserver.h"
 #include "client.h"
 
-extern "C" {
-#include "../LUA/include/lua.h"
-#include "../LUA/include/lualib.h"
-#include "../LUA/include/lauxlib.h"
-}
+#include "../LUA/lua.hpp"
 
 using namespace std;
 
@@ -93,6 +89,7 @@ struct LuaSpell{
 	bool            cancel_after_all_triggers;
 	bool            had_triggers;
 	bool            had_dmg_remaining;
+	bool			was_cured;
 	Mutex           MSpellTargets;
 	int32           effect_bitmask;
 
@@ -207,6 +204,7 @@ public:
 
 	void			AddSpawnPointers(LuaSpell* spell, bool first_cast, bool precast = false, const char* function = 0, SpellScriptTimer* timer = 0);
 	LuaSpell*		GetCurrentSpell(lua_State* state);
+	void			SetCurrentSpell(lua_State* state, LuaSpell* spell);
 	bool			CallSpellProcess(LuaSpell* spell, int8 num_parameters);
 	LuaSpell*		GetSpell(const char* name);
 	void			UseItemScript(const char* name, lua_State* state, bool val);

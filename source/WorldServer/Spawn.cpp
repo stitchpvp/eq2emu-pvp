@@ -22,6 +22,7 @@
 #include "../common/timer.h"
 #include <time.h>
 #include <math.h>
+#include <memory>
 #include "Entity.h"
 #include "Widget.h"
 #include "Sign.h"
@@ -31,6 +32,8 @@
 #include "World.h"
 #include "LuaInterface.h"
 #include "PVP.h"
+#include "Zone/SPGrid.h"
+#include "Bots/Bot.h"
 
 extern ConfigReader configReader;
 extern RuleManager rule_manager;
@@ -86,9 +89,17 @@ Spawn::Spawn(){
 	req_quests_override = 0;
 	req_quests_private = false;
 	m_illusionModel = 0;
+	Cell_Info.CurrentCell = nullptr;
+	Cell_Info.CellListIndex = -1;
 	m_Update.SetName("Spawn::m_Update");
 	m_requiredHistory.SetName("Spawn::m_requiredHistory");
 	m_requiredQuests.SetName("Spawn::m_requiredQuests");
+	last_heading_angle = 0.0;
+	size_mod_a = 0;
+	size_mod_b = 0;
+	size_mod_c = 0;
+	size_shrink_multiplier = 0;
+	size_mod_unknown = 0;
 }
 
 Spawn::~Spawn(){
@@ -142,7 +153,7 @@ void Spawn::InitializeHeaderPacketData(Player* player, PacketStruct* header, int
 		header->setDataByName("max_distance", primary_command_list[0]->distance);
 	}
 
-	if (IsPlayer() && player->CanAttackTarget(this)) {
+	if (IsPlayer() && player->IsHostile(this)) {
 		header->setMediumStringByName("default_command", "attack");
 		header->setDataByName("max_distance", 10000.0);
 	}
@@ -156,6 +167,9 @@ void Spawn::InitializeHeaderPacketData(Player* player, PacketStruct* header, int
 			header->setArrayDataByName("group_spawn_id", player->GetIDWithPlayerSpawn((*itr)), i);
 		}
 		MSpawnGroup->releasereadlock(__FUNCTION__, __LINE__);
+	} else if (player != this) {
+		header->setArrayLengthByName("group_size", 1);
+		header->setArrayDataByName("group_spawn_id", player->GetIDWithPlayerSpawn(this), 0);
 	}
 
 	if (header->GetVersion() >= 57080)
@@ -179,17 +193,31 @@ void Spawn::InitializeVisPacketData(Player* player, PacketStruct* vis_packet) {
 			if (appearance.attackable == 1)
 				arrow_color = player->GetArrowColor(GetLevel());
 
-			if (IsPlayer() && player->CanAttackTarget((Player*)this)) {
+			if (IsPlayer() && player->IsHostile(this)) {
 				arrow_color = player->GetArrowColor(GetLevel());
-				npc_con = -4;
+
+				if (player->CanAttackTarget(this)) {
+					npc_con = -4;
+				} else {
+					npc_con = -3;
+				}
+			} else if (IsPlayer()) {
+				npc_con = 4;
 			}
 
+			if (IsPlayer())
+				vis_packet->setDataByName("pvp_difficulty", 6);
+
 			vis_packet->setDataByName("arrow_color", arrow_color);
-			vis_packet->setDataByName("locked_no_loot", appearance.locked_no_loot);
-			if (IsNPC() && player->GetArrowColor(GetLevel()) == ARROW_COLOR_GRAY || player->IsStealthed() || player->IsInvis())
+			vis_packet->setDataByName("locked_no_loot", 1);
+
+			if (IsNPC() && (player->GetArrowColor(GetLevel()) == ARROW_COLOR_GRAY || player->IsStealthed() || player->IsInvis())) {
 				if (npc_con == -4)
 					npc_con = -3;
+			}
+
 			vis_packet->setDataByName("npc_con", npc_con);
+
 			if (appearance.attackable == 1 && IsNPC() && (player->GetFactions()->GetCon(faction_id) <= -4 || ((NPC*)this)->Brain()->GetHate(player) > 1))
 				vis_packet->setDataByName("npc_hate", ((NPC*)this)->Brain()->GetHatePercentage(player));
 			int8 quest_flag = player->CheckQuestFlag(this);
@@ -201,8 +229,8 @@ void Spawn::InitializeVisPacketData(Player* player, PacketStruct* vis_packet) {
 
 	int8 vis_flags = 0;
 	if (MeetsSpawnAccessRequirements(player)){
-		if (appearance.attackable == 1 || (IsPlayer() && player->CanAttackTarget((Player*)this)))
-			vis_flags += 64; //attackable icon
+		if (appearance.attackable == 1 || (IsPlayer() && player->CanAttackTarget(static_cast<Player*>(this))))
+			vis_flags += 64;
 		if (appearance.show_level == 1)
 			vis_flags += 32;
 		if (appearance.display_name == 1)
@@ -211,6 +239,8 @@ void Spawn::InitializeVisPacketData(Player* player, PacketStruct* vis_packet) {
 			vis_flags += 4;
 		if (appearance.show_command_icon == 1)
 			vis_flags += 2;
+		if (this == player)
+			vis_flags += 1;
 	} else if (req_quests_override > 0) {
 			vis_flags = req_quests_override & 0xFF;
 	}
@@ -257,28 +287,21 @@ void Spawn::InitializeFooterPacketData(Player* player, PacketStruct* footer) {
 
 	footer->setMediumStringByName("name", appearance.name);
 	footer->setMediumStringByName("guild", appearance.sub_title);
+
 	if (IsPlayer()) {
-		string prefix_title = GetPrefixTitle();
 		string pvp_title = PVP::GetRank(static_cast<Player*>(this));
-		if (pvp_title.length() > 0) {
-			if (prefix_title.length() > 0)
-				prefix_title = pvp_title + " " + prefix_title;
-			else
-				prefix_title = pvp_title;
-		}
-		footer->setMediumStringByName("prefix", prefix_title.c_str());
-	} else {
-		footer->setMediumStringByName("prefix", appearance.prefix_title);
+		footer->setMediumStringByName("pvp_title", pvp_title.c_str());
+		footer->setDataByName("is_player", 1);
 	}
+
+	footer->setMediumStringByName("prefix", appearance.prefix_title);
 	footer->setMediumStringByName("suffix", appearance.suffix_title);
 	footer->setMediumStringByName("last_name", appearance.last_name);
 
-	if (appearance.attackable == 0 && GetLevel() > 0) {
+	if (IsEntity()) {
 		footer->setDataByName("spawn_type", 1);
-	} else if (appearance.attackable == 0) {
-		footer->setDataByName("spawn_type", 6);
 	} else {
-		footer->setDataByName("spawn_type", 3);
+		footer->setDataByName("spawn_type", 6);
 	}
 }
 
@@ -702,17 +725,8 @@ bool Spawn::TakeDamage(int32 damage){
 	int32 hp = GetHP();
 	if(damage >= hp) {
 		SetHP(0);
-		if (IsPlayer()) {
-			((Player*)this)->InCombat(false);
-			((Player*)this)->SetRangeAttack(false);	
-			GetZone()->TriggerCharSheetTimer(); // force char sheet updates now
-		}
-	}
-	else {
+	} else {
 		SetHP(hp - damage);
-		// if player flag the char sheet as changed so the ui updates properly
-		if (IsPlayer())
-			((Player*)this)->SetCharSheetChanged(true);
 	}
 	return true;
 }
@@ -992,6 +1006,21 @@ sint32 Spawn::GetTotalDissonance()
 sint32 Spawn::GetDissonance()
 {
 	return basic_info.cur_dissonance;
+}
+
+void Spawn::ScalePet() {
+	if (!IsPet() || !IsEntity()) return;
+
+	double base = pow(GetLevel(), 2) * 2 + 40;
+
+	SetTotalHP(static_cast<sint32>(base * 1.5));
+	SetTotalPower(static_cast<sint32>(base * 1.5));
+	SetHP(GetTotalHP());
+	SetPower(GetTotalPower());
+
+	Entity* entity = static_cast<Entity*>(this);
+	entity->ChangePrimaryWeapon();
+	entity->ChangeSecondaryWeapon();
 }
 
 /* --< Alternate Advancement Points >-- */
@@ -1429,7 +1458,6 @@ void Spawn::InitializePosPacketData(Player* player, PacketStruct* packet){
 void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 	int16 version = packet->GetVersion();
 	if(appearance.targetable == 1 || appearance.show_level == 1 || appearance.display_name == 1){
-		appearance.locked_no_loot = 1; //for now
 		if(!IsObject() && !IsGroundSpawn() && !IsWidget() && !IsSign()){
 			int8 percent = 0;
 			if(GetHP() > 0)
@@ -1450,18 +1478,16 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 	}
 	packet->setDataByName("level", (int8)GetLevel());
 	packet->setDataByName("unknown4", (int8)GetLevel());
-	packet->setDataByName("difficulty", appearance.encounter_level); //6);
+	packet->setDataByName("difficulty", appearance.encounter_level);
 	packet->setDataByName("heroic_flag", appearance.heroic_flag);
 	if (!IsObject() && !IsGroundSpawn() && !IsWidget() && !IsSign())
 		packet->setDataByName("interaction_flag", 12); //this makes NPCs head turn to look at you
 
 	if (IsPlayer() && Alive()) {
-		if (spawn->CanAttackTarget(this)) {
-			packet->setDataByName("spawn_type", 6);
-		} else if (version >= 1188) {
-			packet->setDataByName("spawn_type", 0);
+		if (spawn->IsHostile(this)) {
+			packet->setDataByName("spawn_type", 4);
 		} else {
-			packet->setDataByName("spawn_type", spawn_type);
+			packet->setDataByName("spawn_type", 0);
 		}
 	} else {
 		packet->setDataByName("spawn_type", spawn_type);
@@ -1480,6 +1506,12 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 			model_type = GetIllusionModel();
 	}
 
+	packet->setDataByName("unknown600553", size_mod_a, 0);
+	packet->setDataByName("unknown600553", size_mod_b, 1);
+	packet->setDataByName("unknown600553", size_mod_c, 2);
+	packet->setDataByName("unknown600553", size_shrink_multiplier, 3);
+	packet->setDataByName("size_type", size_mod_unknown, 0);
+
 	packet->setDataByName("model_type", model_type);
 	if(appearance.soga_model_type == 0)
 		packet->setDataByName("soga_model_type", model_type);
@@ -1490,15 +1522,17 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 		packet->setDataByName("action_state", GetTempActionState());
 	else
 		packet->setDataByName("action_state", appearance.action_state);
-	if(GetTempVisualState() >= 0)
-		packet->setDataByName("visual_state", GetTempVisualState());
-	else
+
+	if (GetTempVisualState() >= 0) {
+		if (this != spawn || (GetTempVisualState() != 290 && GetTempVisualState() != 11757 && GetTempVisualState() != 11758))
+			packet->setDataByName("visual_state", GetTempVisualState());
+	} else {
 		packet->setDataByName("visual_state", appearance.visual_state);
+	}
 	packet->setDataByName("emote_state", appearance.emote_state);
 	packet->setDataByName("mood_state", appearance.mood_state);
 	packet->setDataByName("gender", appearance.gender);
 	packet->setDataByName("race", appearance.race);
-	packet->setDataByName("gender", appearance.gender);
 	if(IsEntity()){
 		Entity* entity = ((Entity*)this);
 		packet->setDataByName("combat_voice", entity->GetCombatVoice());
@@ -1513,10 +1547,26 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 						continue;
 					}
 				}
+				if (IsBot()) {
+					if (!((Bot*)this)->ShowHelm) {
+						packet->setDataByName("equipment_types", 0, i);
+						packet->setColorByName("equipment_colors", 0, i);
+						packet->setColorByName("equipment_highlights", 0, i);
+						continue;
+			}
+				}
 			}
 			else if(i == 19){ //don't send cloak if hidden
 				if(IsPlayer()){
 					if(!((Player*)this)->get_character_flag(CF_SHOW_CLOAK)){
+						packet->setDataByName("equipment_types", 0, i);
+						packet->setColorByName("equipment_colors", 0, i);
+						packet->setColorByName("equipment_highlights", 0, i);
+						continue;
+					}
+				}
+				if (IsBot()) {
+					if (!((Bot*)this)->ShowCloak) {
 						packet->setDataByName("equipment_types", 0, i);
 						packet->setColorByName("equipment_colors", 0, i);
 						packet->setColorByName("equipment_highlights", 0, i);
@@ -1591,6 +1641,13 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 		packet->setColorByName("soga_hair_face_color", entity->features.soga_hair_face_color);
 		packet->setColorByName("soga_hair_face_highlight_color", entity->features.soga_hair_face_highlight_color);
 		packet->setColorByName("soga_hair_highlight", entity->features.soga_hair_highlight_color);
+
+		packet->setDataByName("body_age", entity->features.body_age);
+
+		if (spawn->IsHostile(this)) {
+			packet->setDataByName("unknown5", 1);
+			packet->setDataByName("unknown7", 255);
+		}
 	}
 	else{
 		EQ2_Color empty;
@@ -1603,17 +1660,13 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 		packet->setColorByName("soga_eye_color", empty);
 	}
 
-	if (appearance.icon == 0) {
-		if (appearance.attackable == 1 || (IsPlayer() && spawn->CanAttackTarget((Player*)this))) {
-			appearance.icon = 0;
-		}
-		else if (appearance.encounter_level > 0) {
+	/*if (appearance.icon == 0) {
+		if (appearance.encounter_level > 0) {
 			appearance.icon = 4;
-		}
-		else {
+		} else {
 			appearance.icon = 6;
 		}
-	}
+	}*/
 	
 	// If Coe+ clients modify the values before we send
 	// if not then just send the value we have.
@@ -1646,6 +1699,55 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 	packet->setDataByName("icon", temp_icon);//appearance.icon);
 
 	int16 temp_activity_status = 0;
+	int32 temp_activity_timer = 0;
+
+	if (IsPlayer()) {
+		Player* player = static_cast<Player*>(this);
+		shared_ptr<ActivityStatus> ret_status = nullptr;
+
+		for (const auto& status : player->activity_statuses) {
+			if ((!ret_status || status->status == ACTIVITY_STATUS_CAMPING || status->end_time > ret_status->end_time) && status->end_time > Timer::GetCurrentTime2())
+				ret_status = status;
+		}
+
+		if (ret_status) {
+			temp_activity_timer = ret_status->end_time;
+
+			if ((appearance.activity_status & ret_status->status) == 0) {
+				if (version >= 1188) {
+					if ((ret_status->status & ACTIVITY_STATUS_ROLEPLAYING) > 0)
+						temp_activity_status += ACTIVITY_STATUS_ROLEPLAYING_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_ANONYMOUS) > 0)
+						temp_activity_status += ACTIVITY_STATUS_ANONYMOUS_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_LINKDEAD) > 0)
+						temp_activity_status += ACTIVITY_STATUS_LINKDEAD_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_CAMPING) > 0)
+						temp_activity_status += ACTIVITY_STATUS_CAMPING_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_LFG) > 0)
+						temp_activity_status += ACTIVITY_STATUS_LFG_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_LFW) > 0)
+						temp_activity_status += ACTIVITY_STATUS_LFW_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_SOLID) > 0)
+						temp_activity_status += ACTIVITY_STATUS_SOLID_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_IMMUNITY_GAINED) > 0)
+						temp_activity_status += ACTIVITY_STATUS_IMMUNITY_GAINED_1188;
+
+					if ((ret_status->status & ACTIVITY_STATUS_IMMUNITY_REMAINING) > 0)
+						temp_activity_status += ACTIVITY_STATUS_IMMUNITY_REMAINING_1188;
+				} else {
+					temp_activity_status += ret_status->status;
+				}
+			}
+		}
+	}
+
 	if (version >= 1188) {
 		if ((appearance.activity_status & ACTIVITY_STATUS_ROLEPLAYING) > 0)
 			temp_activity_status += ACTIVITY_STATUS_ROLEPLAYING_1188;
@@ -1676,9 +1778,10 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 	}
 	else
 		temp_activity_status = appearance.activity_status;
-
-	packet->setDataByName("activity_status", temp_activity_status); //appearance.activity_status);
-
+	
+	packet->setDataByName("activity_status", temp_activity_status);
+	packet->setDataByName("activity_timer", temp_activity_timer);
+	
 	// If player and player has a follow target
 	if (IsPlayer()) {
 		if (((Player*)this)->GetFollowTarget())
@@ -1747,7 +1850,6 @@ void Spawn::InitializeInfoPacketData(Player* spawn, PacketStruct* packet){
 					break;
 			}
 
-
 			packet->setSubstructDataByName("spell_effects", "spell_icon_backdrop", backdrop, i);
 			spell = info->spell_effects[i].spell;
 			if (spell)
@@ -1811,7 +1913,7 @@ void Spawn::ProcessMovement(){
 				SetSpeed(speed);
 			}
 			MovementLocation* loc = GetCurrentRunningLocation();
-			if (GetDistance(followTarget, true) <= MAX_COMBAT_RANGE || (loc && loc->x == GetX() && loc->y == GetY() && loc->z == GetZ())) {
+			if (GetDistance(followTarget) <= MAX_COMBAT_RANGE || (loc && loc->x == GetX() && loc->y == GetY() && loc->z == GetZ())) {
 				ClearRunningLocations();
 				CalculateRunningLocation(true);
 			}
@@ -2128,7 +2230,7 @@ bool Spawn::CalculateChange(){
 			//float test_vector=sqrtf (data->x*data->x + data->y*data->y + data->z*data->z);
 			// Goto http://www.eq2emulator.net/phpBB3/viewtopic.php?f=13&t=3180#p24256
 			// for detailed info on how I got the speed equation (1.1043506061 * GetSpeed() + 0.1832966667)
-			float tar_vector = (1.1043506061 * GetSpeed() + 0.1832966667) / sqrtf (tar_vx*tar_vx + tar_vy*tar_vy + tar_vz*tar_vz);
+			float tar_vector = (1.1043506061 * (GetSpeed() < 0 ? (100 - GetSpeed()) / 100.0 : GetSpeed()) + 0.1832966667) / sqrtf (tar_vx*tar_vx + tar_vy*tar_vy + tar_vz*tar_vz);
 
 			// Distance less then 0.5 just set the npc to the target location
 			if (GetDistance(data->x, data->y, data->z, IsWidget() ? false : true) <= 0.5f) {
@@ -2141,6 +2243,18 @@ bool Spawn::CalculateChange(){
 				SetY(GetY() + ((tar_vy*tar_vector)*time_step), false);
 				SetZ(GetZ() + ((tar_vz*tar_vector)*time_step), false);
 			}
+
+			if (GetZone()->Grid != nullptr) {
+				Cell* newCell = GetZone()->Grid->GetCell(GetX(), GetZ());
+				if (newCell != Cell_Info.CurrentCell) {
+					GetZone()->Grid->RemoveSpawnFromCell(this);
+					GetZone()->Grid->AddSpawn(this, newCell);
+		}
+
+				int32 newGrid = GetZone()->Grid->GetGridID(this);
+				if (newGrid != appearance.pos.grid_id)
+					SetPos(&(appearance.pos.grid_id), newGrid);
+	}
 		}
 	}
 	return remove_needed;
@@ -2161,22 +2275,31 @@ void Spawn::CalculateRunningLocation(bool stop){
 
 void Spawn::FaceTarget(float x, float z){
 	float angle;
+
 	double diff_x=x - GetX();
 	double diff_z=z - GetZ();
-	if(diff_z==0){
-	   if(diff_x > 0)
-		   angle = 90;
-	   else
-		   angle = 270;
-	}
-	else
+
+	if (diff_z==0) {
+		if (diff_x > 0) {
+			angle = 90;
+		} else {
+			angle = 270;
+		}
+	} else {
 		angle = ((atan(diff_x / diff_z)) * 180) / 3.14159265358979323846;
-	if(angle < 0)
+	}
+
+	if (angle < 0) {
 		angle = angle + 360;
-	else
+	} else {
 		angle = angle + 180;
+	}
+
 	if(diff_x < 0)
 		angle = angle + 180;
+
+	if (last_heading_angle == angle) return;
+
 	SetHeading(angle);
 }
 

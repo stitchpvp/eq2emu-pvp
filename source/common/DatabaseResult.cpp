@@ -32,6 +32,7 @@ DatabaseResult::DatabaseResult() {
 	result = NULL;
 	field_names = NULL;
 	num_fields = 0;
+	row = 0;
 }
 
 DatabaseResult::~DatabaseResult() {

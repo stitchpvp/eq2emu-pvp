@@ -36,6 +36,7 @@ public:
 		if(!inName)
 			return;
 		name = string(inName);
+		id = inID;
 	}
 
 	int GetID() { return id; }

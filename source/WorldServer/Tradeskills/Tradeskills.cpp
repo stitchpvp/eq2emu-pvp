@@ -21,13 +21,13 @@
 #include "../client.h"
 #include "../../common/ConfigReader.h"
 #include "../classes.h"
-#include "../../common/debug.h"
+//#include "../../common/debug.h"
 #include "../../common/Log.h"
-#include "../zoneserver.h"
-#include "../Skills.h"
-#include "../classes.h"
+//#include "../zoneserver.h"
+//#include "../Skills.h"
+//#include "../classes.h"
 #include "../World.h"
-#include "../LuaInterface.h"
+//#include "../LuaInterface.h"
 #include "../ClientPacketFunctions.h"
 #include "../WorldDatabase.h"
 #include "../Rules/Rules.h"
@@ -440,7 +440,7 @@ void TradeskillMgr::CheckTradeskillEvent(Client* client, int16 icon) {
 
 Tradeskill* TradeskillMgr::GetTradeskill(Client* client) {
 	if (tradeskillList.count(client) == 0)
-		return 0;
+		return nullptr;
 
 	return tradeskillList[client];
 }

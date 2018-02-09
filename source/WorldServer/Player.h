@@ -33,6 +33,9 @@
 #include "Languages.h"
 #include "Achievements/Achievements.h"
 #include <algorithm>
+#include <set>
+#include <mutex>
+#include <memory>
 
 #define CF_COMBAT_EXPERIENCE_ENABLED  0
 #define CF_ENABLE_CHANGE_LASTNAME  1
@@ -69,36 +72,35 @@
 #define CF2_1  32
 #define CF2_2  33
 #define CF2_4  34
-#define CF2_ALLOW_LON_INVITES  35
-#define CF2_SHOW_RANGED 36
-#define CF2_ALLOW_VOICE_INVITES  37
-#define CF2_CHARACTER_BONUS_EXPERIENCE_ENABLED  38
-#define CF2_80  39
-#define CF2_100  40 /* hide achievments*/
-#define CF2_200  41
-#define CF2_400  42
-#define CF2_800  43 /* enable facebook updates*/
-#define CF2_1000  44 /* enable twitter updates*/
-#define CF2_2000  45 /* enable eq2 player updates */
-#define CF2_4000  46 /*eq2 players, link to alt chars */
-#define CF2_8000  47
-#define CF2_10000  48
-#define CF2_20000  49
-#define CF2_40000  50
-#define CF2_80000  51
-#define CF2_100000  52
-#define CF2_200000  53
-#define CF2_400000  54
-#define CF2_800000  55
-#define CF2_1000000  56
-#define CF2_2000000  57
-#define CF2_4000000  58
-#define CF2_8000000  59
-#define CF2_10000000  60
-#define CF2_20000000  61
-#define CF2_40000000  62
-#define CF2_80000000  63
-#define CF_MAXIMUM_FLAG  63
+#define CF2_SHOW_RANGED 35
+#define CF2_ALLOW_VOICE_INVITES  36
+#define CF2_CHARACTER_BONUS_EXPERIENCE_ENABLED  37
+#define CF2_80  38
+#define CF2_100  39 /* hide achievments*/
+#define CF2_200  40
+#define CF2_400  41
+#define CF2_800  42 /* enable facebook updates*/
+#define CF2_1000  43 /* enable twitter updates*/
+#define CF2_2000  44 /* enable eq2 player updates */
+#define CF2_4000  45 /*eq2 players, link to alt chars */
+#define CF2_8000  46
+#define CF2_10000  47
+#define CF2_20000  48
+#define CF2_40000  49
+#define CF2_80000  50
+#define CF2_100000  51
+#define CF2_200000  52
+#define CF2_400000  53
+#define CF2_800000  54
+#define CF2_1000000  55
+#define CF2_2000000  56
+#define CF2_4000000  57
+#define CF2_8000000  58
+#define CF2_10000000  59
+#define CF2_20000000  60
+#define CF2_40000000  61
+#define CF2_80000000  62
+#define CF_MAXIMUM_FLAG  62
 #define CF_HIDE_STATUS  49 /* !!FORTESTING ONLY!! */
 #define CF_GM_HIDDEN  50 /* !!FOR TESTING ONLY!! */
 
@@ -238,6 +240,11 @@ struct InstanceData{
 	int32	failure_lockout_time;
 };
 
+struct HostileEntity {
+	int32 last_activity;
+	bool has_attacked;
+};
+
 class CharacterInstances {
 public:
 	CharacterInstances();
@@ -322,7 +329,7 @@ public:
 	void SetBindY(float y);
 	void SetBindZ(float z);
 	void SetBindHeading(float heading);
-	void SetAccountAge(int8 days);
+	void SetAccountAge(int16 days);
 	int32 GetHouseZoneID();
 	int32 GetBindZoneID();
 	float GetBindZoneX();
@@ -520,7 +527,7 @@ public:
 	bool	DoubleXPEnabled();
 	float	CalculateXP(Spawn* victim);
 	float	CalculateTSXP(int8 level);
-	void	InCombat(bool val, bool range = false);
+	void	InCombat(bool val);
 	void	PrepareIncomingMovementPacket(int32 len, uchar* data, int16 version);
 	uchar*	GetMovementPacketData(){
 		return movement_packet;
@@ -546,12 +553,20 @@ public:
 	void	SetResurrecting(bool val);
 	int8	GetArrowColor(int8 spawn_level);
 	int8    GetTSArrowColor(int8 level);
+	void	AddActivityStatus(shared_ptr<ActivityStatus> status);
+	bool	HasActivityStatus(int16 type);
+	void	CheckActivityStatuses();
+	void	SetPVPImmune(bool val);
+	bool	GetPVPImmune() { return pvp_immune; }
 	Spawn*	GetSpawnByIndex(int16 index);
 	int16	GetIndexForSpawn(Spawn* spawn);
 	bool	WasSpawnRemoved(Spawn* spawn);
 	void	RemoveSpawn(Spawn* spawn);
 	void	ClearRemovedSpawn(Spawn* spawn);
 	bool	ShouldSendSpawn(Spawn* spawn);
+
+	void SortSpellBook();
+	void CheckEncounterList();
 
 	map<int16, Spawn*>* GetPlayerSpawnMap(){
 		return &player_spawn_map;
@@ -628,7 +643,7 @@ public:
 
 	//PlayerGroup*		GetGroup();
 	void				SetGroup(PlayerGroup* group);
-	bool				IsGroupMember(Player* player);
+	bool				IsGroupMember(Entity* player);
 	void				SetGroupInformation(PacketStruct* packet);
 
 
@@ -643,6 +658,8 @@ public:
 	void				SetAwayMessage(string val) { away_message = val; }
 	void				SetRangeAttack(bool val);
 	bool				GetRangeAttack();
+	void				SetMeleeAttack(bool val);
+	bool				GetMeleeAttack();
 	ZoneServer*			GetGroupMemberInZone(int32 zone_id);
 	bool				AddMail(Mail* mail);
 	MutexMap<int32, Mail*>*	GetMail();
@@ -741,10 +758,12 @@ public:
 	void LockAllSpells();
 
 	/// <summary>Unlocks all Spells, Combat arts, and Abilities (not trade skill spells)</summary>
-	void UnlockAllSpells(bool modify_recast = false);
+	void UnlockAllSpells(bool first_load = false);
 
 	/// <summary>Locks the given spell as well as all spells with a shared timer</summary>
 	void LockSpell(Spell* spell, int16 recast);
+
+	bool HasLinkedSpellEffect(int32 timer_id);
 
 	/// <summary>Unlocks the given spell as well as all spells with shared timers</summary>
 	void UnlockSpell(Spell* spell);
@@ -762,7 +781,10 @@ public:
 	void UnQueueSpell(Spell* spell);
 
 	///<summary>Get all the spells the player has with the given id</summary>
-	vector<Spell*> GetSpellBookSpellsByTimer(int32 timerID);
+	vector<Spell*> GetSpellBookSpellsByTimer(int32 timerID, bool should_lock = true);
+
+	void AddSpellStatus(SpellBookEntry* spell, sint16 value);
+	void RemoveSpellStatus(SpellBookEntry* spell, sint16 value);
 
 	PacketStruct* GetQuestJournalPacket(Quest* quest, int16 version, int32 crc);
 
@@ -801,14 +823,43 @@ public:
 	void UpdateLUAHistory(int32 event_id, int32 value, int32 value2);
 	LUAHistory* GetLUAHistory(int32 event_id);
 
+
+
+
+
+
+
+
+	AppearanceData SavedApp;
+	CharFeatures SavedFeatures;
+	bool custNPC = false;
+	Entity* custNPCTarget;
+	// bot index, spawn id
+	map<int32, int32> SpawnedBots;
+
 	int16 GetFame();
 	void SetFame(sint16 value);
 
 	void SetResendSpawns(bool val) { should_resend_spawns = val; return;  }
 	bool GetResendSpawns() { return should_resend_spawns; }
 
+	void AddToEncounterList(int32 spawn_id, int32 last_activity, bool has_attacked = true);
+	void RemoveFromEncounterList(int32 spawn_id);
+	void ClearEncounterList();
+
+	// Encounter list, spawn id => last activity
+	// NPCs will be removed by hate functions
+	// PVP players will be removed based on last activity time
+	mutex encounter_list_mutex;
+	map<int32, HostileEntity*> encounter_list;
+	vector<shared_ptr<ActivityStatus>> activity_statuses;
+
+	int8 temp_status = 0;
+
 private:
 	bool range_attack;
+	bool melee_attack;
+	bool pvp_immune = false;
 	int16 last_movement_activity;
 	bool returning_from_ld;
 	PlayerGroup* group;
@@ -892,7 +943,7 @@ private:
 	void HandleHistoryXP(int8 subtype, int32 value, int32 value2);
 
 	/// <summary></summary>
-	void ModifySpellStatus(SpellBookEntry* spell, sint16 value, bool modify_recast = true, int16 recast = 0);
+	void ModifyRecast(SpellBookEntry* spell, int16 recast);
 
 	void InitXPTable();
 	map<int8, int32> m_levelXPReq;

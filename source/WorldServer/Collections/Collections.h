@@ -10,7 +10,7 @@
 using namespace std;
 
 struct CollectionItem {
-	Item *item;
+	int32 item;
 	int8 index;
 	int8 found;
 };

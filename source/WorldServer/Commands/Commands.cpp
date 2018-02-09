@@ -69,28 +69,6 @@ extern RuleManager rule_manager;
 extern MasterAAList master_aa_list;
 extern MasterRaceTypeList race_types_list;
 
-// Windows as complaing so just made this for linux only
-#ifndef WIN32
-// __cplusplus <= 199711L
-string to_string(int val) {
-	char temp[16];
-	sprintf(temp, "%i", val);
-	return string(temp);
-}
-
-string to_string(unsigned int val) {
-	char temp[16];
-	sprintf(temp, "%u", val);
-	return string(temp);
-}
-
-string to_string(float val) {
-	char temp[16];
-	sprintf(temp, "%f", val);
-	return string(temp);
-}
-#endif
-
 EQ2Packet* RemoteCommands::serialize(){
 	buffer.clear();
 	vector<EQ2_RemoteCommandString>::iterator command_list;
@@ -372,12 +350,12 @@ bool Commands::SetSpawnCommand(Client* client, Spawn* target, int8 type, const c
 									  }
 			case SPAWN_SET_VALUE_HP:{
 				sprintf(tmp, "%i", target->GetHP());
-				target->SetHP(val, send_update);
+				target->SetTotalHP(val);
 				break;
 									}
 			case SPAWN_SET_VALUE_POWER:{
 				sprintf(tmp, "%i", target->GetPower());
-				target->SetPower(val, send_update);
+				target->SetTotalPower(val);
 				break;
 									   }
 			case SPAWN_SET_VALUE_HEROIC:{
@@ -501,12 +479,12 @@ bool Commands::SetSpawnCommand(Client* client, Spawn* target, int8 type, const c
 		switch(type){
 			case SPAWN_SET_VALUE_NAME:{
 				target->SetName(value);
-				target->GetZone()->SendUpdateTitles(target);
+				client->GetCurrentZone()->SendUpdateTitles(target);
 				break;
 									  }
 			case SPAWN_SET_VALUE_SUB_TITLE: {
 				target->SetSubTitle(value);
-				target->GetZone()->SendUpdateTitles(target);
+				client->GetCurrentZone()->SendUpdateTitles(target);
 				break;
 											}
 			case SPAWN_SET_VALUE_X_OFFSET: 
@@ -620,11 +598,11 @@ bool Commands::SetSpawnCommand(Client* client, Spawn* target, int8 type, const c
 				break;
 									  }
 			case SPAWN_SET_VALUE_HP:{
-				target->SetHP(val, send_update);
+				target->SetTotalHP(val);
 				break;
 									}
 			case SPAWN_SET_VALUE_POWER:{
-				target->SetPower(val, send_update);
+				target->SetTotalPower(val);
 				break;
 									   }
 			case SPAWN_SET_VALUE_HEROIC:{
@@ -1238,15 +1216,36 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 						LogWrite(COMMAND__ERROR, 0, "Command", "Unknown Spell ID: %u", spell_id);
 				}
 				else if (strcmp(sep->arg[0], "effect") == 0) {
+					Entity* target = nullptr;
 					int32 spell_id = atol(sep->arg[1]);
-					LogWrite(COMMAND__DEBUG, 5, "Command", "Unknown Spell ID: %u", spell_id);
-					int8 tier = client->GetPlayer()->GetSpellTier(spell_id);
-					EQ2Packet* outapp = master_spell_list.GetSpecialSpellPacket(spell_id, tier, client, true, 0x00);
-					if (outapp){
-						client->QueuePacket(outapp);
+					int8 tier = 0;
+					
+					SpellEffects* spell_effect = client->GetPlayer()->GetSpellEffect(spell_id);
+					if (spell_effect)
+						tier = spell_effect->tier;
+
+					if (!tier && client->GetPlayer()->GetTarget() && client->GetPlayer()->GetTarget()->IsEntity()) {
+						target = static_cast<Entity*>(client->GetPlayer()->GetTarget());
+						SpellEffects* spell_effect = target->GetSpellEffect(spell_id);
+
+						if (spell_effect)
+							tier = spell_effect->tier;
 					}
-					else
+
+					if (!tier && target && target->GetTarget() && target->GetTarget()->IsEntity()) {
+						Entity* assist = static_cast<Entity*>(target->GetTarget());
+						SpellEffects* spell_effect = assist->GetSpellEffect(spell_id);
+
+						if (spell_effect)
+							tier = spell_effect->tier;
+					}
+
+					EQ2Packet* outapp = master_spell_list.GetSpecialSpellPacket(spell_id, tier, client, true, 0x00);
+					if (outapp) {
+						client->QueuePacket(outapp);
+					} else {
 						LogWrite(COMMAND__ERROR, 0, "Command", "Unknown Spell ID: %u", spell_id);
+					}
 				}
 			}
 			else if (sep && strcmp(sep->arg[0], "overflow") == 0) {
@@ -1386,10 +1385,15 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 		case COMMAND_SUMMONITEM:{
 			if(sep && sep->arg[0][0] && sep->IsNumber(0)){
 				int32 item_id = atol(sep->arg[0]);
-				client->AddItem(item_id);
+				int32 quantity = 1;
+
+				if (sep->arg[1] && sep->IsNumber(1))
+					quantity = atol(sep->arg[1]);
+
+				client->AddItem(item_id, quantity);
 			}
 			else
-				client->SimpleMessage(CHANNEL_COLOR_YELLOW,"Usage: /summonitem {item_id}");
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW,"Usage: /summonitem {item_id} [quantity]");
 			break;
 		}
 		case COMMAND_COLLECTION_ADDITEM: {
@@ -1480,10 +1484,14 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 					show_bubble = false;
 				client->GetCurrentZone()->HandleChatMessage(client->GetPlayer(), 0, CHANNEL_SAY, tmp, HEAR_SPAWN_DISTANCE, 0, show_bubble);
 				if(spawn->IsPlayer() == false && spawn->GetDistance(client->GetPlayer()) < 30){
-					if(spawn->IsNPC() && ((NPC*)spawn)->EngagedInCombat())
+					if (spawn->IsNPC() && ((NPC*)spawn)->EngagedInCombat()) {
 						spawn->GetZone()->CallSpawnScript(spawn, SPAWN_SCRIPT_HAILED_BUSY, client->GetPlayer());
-					else
+					} else {
+						if (spawn->IsEntity())
+							static_cast<Entity*>(spawn)->FaceTarget(client->GetPlayer());
+
 						spawn->GetZone()->CallSpawnScript(spawn, SPAWN_SCRIPT_HAILED, client->GetPlayer());
+					}
 				}
 			}
 			else {
@@ -1562,15 +1570,9 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 				client->GetPlayer()->SetSize(atoi(sep->arg[0]));
 				client->GetCurrentZone()->SendPlayerPositionChanges(client->GetPlayer());
 
-				PacketStruct* control_packet = configReader.getStruct("WS_SetControlGhost", client->GetVersion());
-				if (control_packet) {
-					control_packet->setDataByName("spawn_id", 0xFFFFFFFF);
-					control_packet->setDataByName("speed", client->GetPlayer()->GetSpeed());
-					control_packet->setDataByName("air_speed", client->GetPlayer()->GetAirSpeed());
-					control_packet->setDataByName("size", 0.2);
-					client->QueuePacket(control_packet->serialize());
-					safe_delete(control_packet);
-				}
+				EQ2Packet* outapp = client->GetPlayer()->player_position_update_packet(client->GetPlayer(), client->GetVersion());
+				if (outapp)
+					client->QueuePacket(outapp);
 			} else {
 				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Usage: /size {size}");
 			}
@@ -2391,7 +2393,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 						client->Message(CHANNEL_COLOR_YELLOW, "Zone %s (%u) is now locked.", zsZone->GetZoneName(), zsZone->GetZoneID());
 					}
 					else
-						client->Message(CHANNEL_COLOR_RED, "Zone %s (%u) is not running and cannot be locked.", zsZone->GetZoneName(), zsZone->GetZoneID());
+						client->Message(CHANNEL_COLOR_RED, "Zone %s is not running and cannot be locked.", sep->arg[1]);
 
 					break;
 				}
@@ -2410,7 +2412,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 						client->Message(CHANNEL_COLOR_YELLOW, "Zone %s (%u) is now unlocked.", zsZone->GetZoneName(), zsZone->GetZoneID());
 					}
 					else
-						client->Message(CHANNEL_COLOR_RED, "Zone %s (%u) is not running and cannot be unlocked.", zsZone->GetZoneName(), zsZone->GetZoneID());
+						client->Message(CHANNEL_COLOR_RED, "Zone %s is not running and cannot be unlocked.", sep->arg[1]);
 					break;
 				}
 				else
@@ -2510,49 +2512,49 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 		case COMMAND_AUTO_ATTACK:{
 			int8 type = 1;
 			Player* player = client->GetPlayer();
+
 			if(!player)
 				break;
-			bool incombat = player->EngagedInCombat();
-			if(sep && sep->arg[0] && sep->IsNumber(0))
-				type = atoi(sep->arg[0]);
-			if(client->GetPlayer()->GetHP() == 0){
-				client->SimpleMessage(CHANNEL_COLOR_RED,"You cannot do that right now.");
+
+			if (client->GetPlayer()->GetHP() == 0) {
+				client->SimpleMessage(CHANNEL_COLOR_RED, "You cannot do that right now.");
 				break;
 			}
-			if(type == 0){
-				if(incombat)
+
+			bool in_combat = player->EngagedInCombat();
+			if(sep && sep->arg[0] && sep->IsNumber(0))
+				type = atoi(sep->arg[0]);
+
+			switch (type) {
+			case 0:
+				if (in_combat)
 					client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You stop fighting.");
+
 				player->InCombat(false);
-				player->InCombat(false, true);
 				player->SetRangeAttack(false);
+				player->SetMeleeAttack(false);
+
+				break;
+
+			case 1:
+				if (!in_combat)
+					client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You start fighting.");
+				player->InCombat(true);
+				player->SetMeleeAttack(true);
+				player->SetRangeAttack(false);
+
+				break;
+
+			case 2:
+				player->InCombat(true);
+				player->SetMeleeAttack(false);
+				player->SetRangeAttack(true);
+
+				break;
 			}
-			else {
-				if(type == 2){
-					player->InCombat(false);
-					if(incombat && player->GetRangeAttack()){
-						player->SetRangeAttack(false);
-						player->InCombat(false, true);
-						client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You stop fighting.");
-					}
-					else{
-						player->SetRangeAttack(true);
-						player->InCombat(true, true);
-						client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You start fighting.");
-					}
-				}
-				else {
-					player->InCombat(false, true);
-					player->SetRangeAttack(false);
-					player->InCombat(true);
-					if(!incombat)
-						client->SimpleMessage(CHANNEL_COLOR_COMBAT, "You start fighting.");
-				}
-				/*else
-					client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You cannot attack that!");*/
-			}
-			player->SetCharSheetChanged(true);
+
 			break;
-								}
+		}
 		case COMMAND_DEPOP:{
 			bool allow_respawns = false;
 			if(sep && sep->arg[0] && sep->IsNumber(0)){
@@ -2710,11 +2712,8 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 						client->SetItemSearch(items);
 						client->SearchStore(0);
 					}
-					else{
-						safe_delete(items);
 					}
 				}
-			}
 			break;
 		}
 		
@@ -2894,7 +2893,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 				spawn = new GroundSpawn();
 				memset(&spawn->appearance, 0, sizeof(spawn->appearance));
 			}
-			else if (sep && sep->arg[4][0] && strncasecmp(sep->arg[0], "sign", 11) == 0 && sep->IsNumber(1) && sep->IsNumber(2) && sep->IsNumber(3)) {
+			else if (sep && sep->arg[4][0] && strncasecmp(sep->arg[0], "sign", 4) == 0 && sep->IsNumber(1) && sep->IsNumber(2) && sep->IsNumber(3)) {
 				spawn = new Sign();
 				memset(&spawn->appearance, 0, sizeof(spawn->appearance));
 			}
@@ -3200,7 +3199,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 								}
 		case COMMAND_SPAWN_ADD:{
 			Spawn* spawn = client->GetPlayer()->GetTarget();
-			if(spawn && sep && sep->arg[1][0] && (sep->IsNumber(0) || strncasecmp(sep->arg[0], "new", 3) == 0)){
+			if(spawn && sep && (sep->IsNumber(0) || strncasecmp(sep->arg[0], "new", 3) == 0)){
 				if(spawn->GetSpawnLocationID() > 0){
 					client->Message(CHANNEL_COLOR_RED, "This spawn already has a spawn group id of %u, use /spawn remove to reassign it", spawn->GetSpawnLocationID());
 					break;
@@ -3208,7 +3207,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 				if(spawn->GetDatabaseID() == 0){
 					if(database.SaveSpawnInfo(spawn)) {
 						char spawn_type[32];
-						memset(spawn_type, 0, sizeof(spawn_type) - 1);
+						memset(spawn_type, 0, sizeof(spawn_type));
 						if (spawn->IsNPC())
 							strncpy(spawn_type, "NPC", sizeof(spawn_type) - 1);
 						else if (spawn->IsObject())
@@ -3230,19 +3229,19 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 				else
 					spawn_group_id = atol(sep->arg[0]);
 				int8 percent = 100;
-				if(sep->arg[2] && sep->IsNumber(2))
-					percent = atoi(sep->arg[2]);
+				if(sep->arg[1] && sep->IsNumber(1))
+					percent = atoi(sep->arg[1]);
 				spawn->SetSpawnLocationID(spawn_group_id);
 				float x_offset = database.GetSpawnLocationPlacementOffsetX(spawn->GetSpawnLocationID());
 				float y_offset = database.GetSpawnLocationPlacementOffsetY(spawn->GetSpawnLocationID());
 				float z_offset = database.GetSpawnLocationPlacementOffsetZ(spawn->GetSpawnLocationID());
-				if(database.SaveSpawnEntry(spawn, sep->arg[1], percent, x_offset, y_offset, z_offset))
+				if(database.SaveSpawnEntry(spawn, "", percent, x_offset, y_offset, z_offset))
 					client->Message(CHANNEL_COLOR_YELLOW, "Successfully saved spawn location with a spawn group of %u", spawn->GetSpawnLocationID());
 				else
 					client->SimpleMessage(CHANNEL_COLOR_RED, "Error saving spawn location, see console window for details.");	
 			}
 			else{
-				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Syntax: /spawn add [spawn group id] [spawn group name] (percentage)");
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Syntax: /spawn add [spawn group id] (percentage)");
 				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "This command is used for adding the targeted NPC or Object to the database.");
 				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You can substitute new for [spawn group id] to create a new one.");
 			}
@@ -3709,11 +3708,25 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 		case COMMAND_EDITOR				: { Command_Editor(client, sep); break; }
 		case COMMAND_ACCEPT_RESURRECTION: { Command_AcceptResurrection(client, sep); break; }
 		case COMMAND_DECLINE_RESURRECTION:{ Command_DeclineResurrection(client, sep); break; }
-		case COMMAND_TEST				: { Command_Test(client, command_parms); break; }
+		case COMMAND_TEST				: { Command_Test(client, sep); break; }
+		case COMMAND_MOUNT				: { Command_Mount(client, sep); break; }
 		case COMMAND_SPEED				: { Command_Speed(client, sep); break; }
 		case COMMAND_SERVER_FLAG        : { Command_ServerFlag(client, sep); break; }
 		case COMMAND_PVP_RANGE			: { Command_PVPRange(client); break; }
 		case COMMAND_PVP				: { Command_PVP(client); break; }
+		case COMMAND_KNOWLEDGEWINDOW_SORT:{ Command_KnowledgeWindow_Sort(client, sep); break; }
+		case COMMAND_RESET_ENCOUNTER    : { Command_ResetEncounter(client); break; }
+		case COMMAND_KNOCKBACK			: { Command_Knockback(client, sep);  break; }
+		case COMMAND_HEAL				: { Command_Heal(client);  break; }
+
+		case COMMAND_BOT				: { Command_Bot(client, sep); break; }
+		case COMMAND_BOT_CREATE			: { Command_Bot_Create(client, sep); break; }
+		case COMMAND_BOT_CUSTOMIZE		: { Command_Bot_Customize(client, sep); break; }
+		case COMMAND_BOT_SPAWN			: { Command_Bot_Spawn(client, sep); break; }
+		case COMMAND_BOT_LIST			: { Command_Bot_List(client, sep); break; }
+		case COMMAND_BOT_INV			: { Command_Bot_Inv(client, sep); break; }
+		case COMMAND_BOT_SETTINGS		: { Command_Bot_Settings(client, sep); break; }
+		case COMMAND_BOT_HELP			: { Command_Bot_Help(client, sep); break; }
 
 		default: 
 		{
@@ -4155,6 +4168,7 @@ void Commands::Command_StopFollow(Client* client, Seperator* sep)
 	}
 }
 
+#include "../Zone/SPGrid.h"
 /* 
 	Function: Command_Grid()
 	Purpose	: Show player's current Grid ID
@@ -4165,6 +4179,11 @@ void Commands::Command_StopFollow(Client* client, Seperator* sep)
 void Commands::Command_Grid(Client* client)
 {
 	client->Message(CHANNEL_COLOR_YELLOW, "Your Grid ID is %u", client->GetPlayer()->appearance.pos.grid_id);
+
+	if (client->GetCurrentZone()->Grid != nullptr) {
+		int32 grid = client->GetCurrentZone()->Grid->GetGridID(client->GetPlayer());
+		client->Message(CHANNEL_COLOR_YELLOW, "SPGrid result is %u", grid);
+	}
 }
 
 /* 
@@ -4790,7 +4809,7 @@ void Commands::Command_Inventory(Client* client, Seperator* sep, EQ2_RemoteComma
 			client->QueuePacket(outapp);
 
 			//removed from bag send update
-			if(old_inventory_id > 0 && item->details.inv_slot_id != old_inventory_id)
+			if(old_inventory_id > 0 && item && item->details.inv_slot_id != old_inventory_id)
 			{ 
 				outapp = client->GetPlayer()->SendBagUpdate(old_inventory_id, client->GetVersion());
 				if(outapp)
@@ -7124,10 +7143,10 @@ void Commands::Command_Toggle_Raids(Client* client)
 
 void Commands::Command_Toggle_LON(Client* client)
 {
-	Player* player = client->GetPlayer();
+	/*Player* player = client->GetPlayer();
 
 	player->toggle_character_flag(CF2_ALLOW_LON_INVITES);
-	client->Message(CHANNEL_COLOR_YELLOW,"You are %s accepting LoN invites.", player->get_character_flag(CF2_ALLOW_LON_INVITES)?"now":"no longer");
+	client->Message(CHANNEL_COLOR_YELLOW,"You are %s accepting LoN invites.", player->get_character_flag(CF2_ALLOW_LON_INVITES)?"now":"no longer");*/
 }
 
 void Commands::Command_Toggle_VoiceChat(Client* client)
@@ -7145,11 +7164,48 @@ void Commands::Command_Toggle_VoiceChat(Client* client)
 	Dev		: 
 	Example	: 
 */ 
+#include "../Trade.h"
 void Commands::Command_TradeStart(Client* client, Seperator* sep)
 {
 	PrintSep(sep, "COMMAND_START_TRADE");
-	LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Start Player Trading");
-	client->Message(CHANNEL_COLOR_YELLOW, "You cannot trade with other players (Not Implemented)");
+
+	Entity* trader = client->GetPlayer();
+	Entity* trader2 = 0;
+	if (sep && sep->IsSet(0) && sep->IsNumber(0)) {
+		Spawn* spawn = client->GetPlayer()->GetSpawnWithPlayerID(atoi(sep->arg[0]));
+		if (spawn) {
+			if (spawn->IsEntity())
+				trader2 = (Entity*)spawn;
+		}
+	}
+	else if (client->GetPlayer()->GetTarget()) {
+		if (client->GetPlayer()->GetTarget()->IsEntity())
+			trader2 = (Entity*)client->GetPlayer()->GetTarget();
+	}
+
+	// can only trade with player or bots
+	if (trader && trader2) {
+		if (trader == trader2) {
+			client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You can't trade with yourself.");
+		}
+		else if (trader2->IsPlayer() || trader2->IsBot()) {
+			LogWrite(PLAYER__ERROR, 0, "Trade", "creating trade");
+			if (trader->trade)
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are already trading.");
+			else if (trader2->trade)
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your target is already trading.");
+			else {
+				Trade* trade = new Trade(trader, trader2);
+				trader->trade = trade;
+				trader2->trade = trade;
+			}
+		}
+		else {
+			client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You can only trade with another player or a bot.");
+		}
+	}
+	else
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Unable to find target");
 }
 
 /* 
@@ -7177,8 +7233,14 @@ void Commands::Command_Track(Client* client)
 void Commands::Command_TradeAccept(Client* client, Seperator* sep)
 {
 	PrintSep(sep, "COMMAND_ACCEPT_TRADE");
-	LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Accept Player Trading");
-	client->Message(CHANNEL_COLOR_YELLOW, "You cannot trade with other players (Not Implemented)");
+	Trade* trade = client->GetPlayer()->trade;
+	if (trade) {
+		bool trade_complete = trade->SetTradeAccepted(client->GetPlayer());
+		if (trade_complete)
+			safe_delete(trade);
+	}
+	else
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are not currently trading.");
 }
 
 /* 
@@ -7205,8 +7267,13 @@ void Commands::Command_TradeReject(Client* client, Seperator* sep)
 void Commands::Command_TradeCancel(Client* client, Seperator* sep)
 {
 	PrintSep(sep, "COMMAND_CANCEL_TRADE");
-	LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Cancel Player Trading");
-	client->Message(CHANNEL_COLOR_YELLOW, "You cannot trade with other players (Not Implemented)");
+	Trade* trade = client->GetPlayer()->trade;
+	if (trade) {
+		trade->CancelTrade(client->GetPlayer());
+		safe_delete(trade);
+	}
+	else
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are not currently trading.");
 }
 
 /* 
@@ -7233,30 +7300,37 @@ void Commands::Command_TradeSetCoin(Client* client, Seperator* sep)
 void Commands::Command_TradeAddCoin(Client* client, Seperator* sep, int handler)
 {
 	PrintSep(sep, "COMMAND_ADD_TRADE_{coin type}");
-
-	switch(handler)
-	{
+	Trade* trade = client->GetPlayer()->trade;
+	if (trade) {
+		if (sep && sep->IsSet(0) && sep->IsNumber(0)) {
+			int32 amount = atoi(sep->arg[0]);
+			int64 val = 0;
+			switch (handler) {
 		case COMMAND_ADD_TRADE_COPPER:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Add Trade Copper");
+				val = amount;
+				trade->AddCoinToTrade(client->GetPlayer(), val);
 				break;
 			}
 
 		case COMMAND_ADD_TRADE_SILVER:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Add Trade Silver");
+				val = amount * 100;
+				trade->AddCoinToTrade(client->GetPlayer(), val);
 				break;
 			}
 
 		case COMMAND_ADD_TRADE_GOLD:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Add Trade Gold");
+				val = amount * 10000;
+				trade->AddCoinToTrade(client->GetPlayer(), val);
 				break;
 			}
 
 		case COMMAND_ADD_TRADE_PLAT:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Add Trade Platinum");
+				val = amount * 1000000;
+				trade->AddCoinToTrade(client->GetPlayer(), val);
 				break;
 			}
 
@@ -7266,8 +7340,12 @@ void Commands::Command_TradeAddCoin(Client* client, Seperator* sep, int handler)
 				break;
 			}
 	}
-
-	client->Message(CHANNEL_COLOR_YELLOW, "You cannot trade with other players (Not Implemented)");
+		}
+		else
+			client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Invalid coin amount.");
+	}
+	else
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are not currently trading.");
 }
 
 /* 
@@ -7281,29 +7359,37 @@ void Commands::Command_TradeRemoveCoin(Client* client, Seperator* sep, int handl
 {
 	PrintSep(sep, "COMMAND_REMOVE_TRADE_{coin type}");
 
-	switch(handler)
-	{
+	Trade* trade = client->GetPlayer()->trade;
+	if (trade) {
+		if (sep && sep->IsSet(0) && sep->IsNumber(0)) {
+			int32 amount = atoi(sep->arg[0]);
+			int64 val = 0;
+			switch (handler) {
 		case COMMAND_REMOVE_TRADE_COPPER:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Remove Trade Copper");
+				val = amount;
+				trade->RemoveCoinFromTrade(client->GetPlayer(), val);
 				break;
 			}
 
 		case COMMAND_REMOVE_TRADE_SILVER:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Remove Trade Silver");
+				val = amount * 100;
+				trade->RemoveCoinFromTrade(client->GetPlayer(), val);
 				break;
 			}
 
 		case COMMAND_REMOVE_TRADE_GOLD:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Remove Trade Gold");
+				val = amount * 10000;
+				trade->RemoveCoinFromTrade(client->GetPlayer(), val);
 				break;
 			}
 
 		case COMMAND_REMOVE_TRADE_PLAT:
 			{
-				LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Remove Trade Platinum");
+				val = amount * 1000000;
+				trade->RemoveCoinFromTrade(client->GetPlayer(), val);
 				break;
 			}
 
@@ -7313,8 +7399,12 @@ void Commands::Command_TradeRemoveCoin(Client* client, Seperator* sep, int handl
 				break;
 			}
 	}
-
-	client->Message(CHANNEL_COLOR_YELLOW, "You cannot trade with other players (Not Implemented)");
+		}
+		else
+			client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Invalid coin amount");
+	}
+	else
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are not currently trading.");
 }
 
 /* 
@@ -7327,8 +7417,39 @@ void Commands::Command_TradeRemoveCoin(Client* client, Seperator* sep, int handl
 void Commands::Command_TradeAddItem(Client* client, Seperator* sep)
 {
 	PrintSep(sep, "COMMAND_ADD_TRADE_ITEM");
-	LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Add Trade Item");
-	client->Message(CHANNEL_COLOR_YELLOW, "You cannot trade with other players (Not Implemented)");
+	/*
+	arg[0] = item index
+	arg[1] = slot
+	arg[2] = quantity
+	*/
+	if (!client->GetPlayer()->trade) {
+		LogWrite(PLAYER__ERROR, 0, "Trade", "Player is not currently trading.");
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are not currently trading.");
+		return;
+	}
+
+	if (sep && sep->IsSet(0) && sep->IsNumber(0) && sep->IsSet(1) && sep->IsNumber(1) && sep->IsSet(2) && sep->IsNumber(2)) {
+		Item* item = 0;
+		int32 index = atoi(sep->arg[0]);
+		item = client->GetPlayer()->GetPlayerItemList()->GetItemFromIndex(index);
+		if (item) {
+			int8 result = client->GetPlayer()->trade->AddItemToTrade(client->GetPlayer(), item, atoi(sep->arg[2]), atoi(sep->arg[1]));
+			if (result == 1)
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Item is already being traded.");
+			else if (result == 2)
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You can't trade NO-TRADE items.");
+			else if (result == 3)
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You can't trade HEIRLOOM items.");
+			else if (result == 255)
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Unknown error trying to add the item to the trade...");
+		}
+		else {
+			LogWrite(PLAYER__ERROR, 0, "Trade", "Unable to get an item for the player (%s) from the index (%u)", client->GetPlayer()->GetName(), index);
+			client->Message(CHANNEL_ERROR, "Unable to find item at index %u", index);
+		}
+	}
+	else
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Invalid item.");
 }
 
 /* 
@@ -7341,8 +7462,20 @@ void Commands::Command_TradeAddItem(Client* client, Seperator* sep)
 void Commands::Command_TradeRemoveItem(Client* client, Seperator* sep)
 {
 	PrintSep(sep, "COMMAND_REMOVE_TRADE_ITEM");
-	LogWrite(MISC__TODO, 1, "Command", "TODO-Command: Remove Trade Item");
-	client->Message(CHANNEL_COLOR_YELLOW, "You cannot trade with other players (Not Implemented)");
+	/*
+	arg[0] = trade window slot
+	*/
+
+	Trade* trade = client->GetPlayer()->trade;
+	if (trade) {
+		if (sep && sep->IsSet(0) && sep->IsNumber(0)) {
+			trade->RemoveItemFromTrade(client->GetPlayer(), atoi(sep->arg[0]));
+		}
+		else
+			client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Invalid item.");
+	}
+	else
+		client->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are not currently trading.");
 }
 
 void Commands::Command_TryOn(Client* client, Seperator* sep)
@@ -7432,72 +7565,96 @@ void Commands::Command_TellChannel(Client *client, Seperator *sep) {
 	chat.TellChannel(client, sep->arg[0], sep->argplus[1]);
 }
 
-void Commands::Command_Test(Client* client, EQ2_16BitString* command_parms) {
+void Commands::Command_Mount(Client* client, Seperator* sep) {
+	if (sep == nullptr) return;
 
-	Seperator* sep2 = new Seperator(command_parms->data.c_str(), ' ', 50, 500, true);
-	if (client->GetPlayer()->GetTarget()) {
-		int spawn_id = client->GetPlayer()->GetIDWithPlayerSpawn(client->GetPlayer()->GetTarget());
+	if (sep->IsSet(0) && sep->IsNumber(0)) {
+		client->GetPlayer()->SetMount(atol(sep->arg[0]));
+	}
+}
 
-		PacketStruct* packet = configReader.getStruct("WS_SetControlGhost", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", 0xFFFFFFFF);
-			packet->setDataByName("unknown2", 255);
-			client->QueuePacket(packet->serialize());
-			safe_delete(packet);
-		}
+void Commands::Command_Knockback(Client* client, Seperator* sep) {
+	if (sep == nullptr) return;
 
-		packet = configReader.getStruct("WS_SetPOVGhostCmd", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", 0xFFFFFFFF);
-			client->QueuePacket(packet->serialize());
-			safe_delete(packet);
-		}
+	float vertical = 0.0;
+	float horizontal = 0.0;
+	bool use_heading = false;
 
-		packet = configReader.getStruct("WS_SetPOVGhostCmd", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", spawn_id);
-			EQ2Packet* app_pov = packet->serialize();
-			client->QueuePacket(app_pov);
-			safe_delete(packet);
-		}
+	if (sep->IsSet(0) && sep->IsNumber(0))
+		vertical = atol(sep->arg[0]);
 
-		packet = configReader.getStruct("WS_SetControlGhost", client->GetVersion());
-		if (packet) {
-			packet->setDataByName("spawn_id", spawn_id);
-			packet->setDataByName("size", 0.56);
-			packet->setDataByName("unknown2", 255);
-			EQ2Packet* app = packet->serialize();
-			client->QueuePacket(app);
-			safe_delete(packet);
-		}
-		/*Spell* spell = master_spell_list.GetSpell(atoi(sep2->arg[0]), 1);
-		client->GetPlayer()->SetSpellStatus(spell, atoi(sep2->arg[1]));
-		client->GetPlayer()->GetZone()->GetSpellProcess()->SendSpellBookUpdate(client);*/
+	if (sep->IsSet(1) && sep->IsNumber(1))
+		horizontal = atol(sep->arg[1]);
+
+	if (sep->IsSet(2) && sep->IsNumber(2))
+		use_heading = atol(sep->arg[2]);
+
+	Client* knockback_client = client;
+	if (client->GetPlayer()->GetTarget() && client->GetPlayer()->GetTarget()->IsPlayer())
+		knockback_client = client->GetCurrentZone()->GetClientBySpawn(client->GetPlayer()->GetTarget());
+
+	PacketStruct* packet = configReader.getStruct("WS_PlayerKnockback", knockback_client->GetVersion());
+	if (packet) {
+		packet->setDataByName("target_x", knockback_client->GetPlayer()->GetX());
+		packet->setDataByName("target_y", knockback_client->GetPlayer()->GetY());
+		packet->setDataByName("target_z", knockback_client->GetPlayer()->GetZ());
+		packet->setDataByName("vertical_movement", vertical);
+		packet->setDataByName("horizontal_movement", horizontal);
+		packet->setDataByName("use_player_heading", use_heading);
+
+		knockback_client->QueuePacket(packet->serialize());
+	}
+	safe_delete(packet);
+}
+
+void Commands::Command_ResetEncounter(Client* client) {
+	Spawn* target = client->GetPlayer()->GetTarget();
+
+	if (target && target->IsNPC()) {
+		static_cast<NPC*>(target)->Brain()->ClearHate();
+		static_cast<NPC*>(target)->Brain()->ClearEncounter();
+		static_cast<NPC*>(target)->GetZone()->RemoveSpellTimersFromSpawn(target, true, true);
+	}
+}
+
+void Commands::Command_Test(Client* client, Seperator* sep) {
+	if (sep == nullptr) return;
+
+	/*if (sep->IsSet(2) && sep->IsNumber(2)) {
+		client->GetCurrentZone()->SendStateCommand(client->GetPlayer(), atol(sep->arg[2]));
 	}
 
-	//uchar blah[] = {
-		// 1208 - OP_EQUpdateStoreCmd
-		// /*0x00,0x3A,*/0x2B,0x00,0x00,0x00,0xFF,0x78,0x02,0x53,0x2C,0x33,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-
-		// /*0x58,*/0x47,0x35,0xD3,0x45,0x42,0x42,0x51,0x00,0x40,0xD1,0xE7,0x57,0xB1,0x51,0xB1,0xBB,0xBB,0xB1,0x3B,0xB0,0xBB,0xB0,0x3B,0x59,0x85,0x5B,0x47,0x1D,0x9C,0x3B,0x3A,0x1B,0xB8,0xD9,0x64,0x14,0x85,0x9F,0x4C,0xC8,0x09,0x21,0xA4,0xB3,0x7F,0x45,0x90,0x0B,0x79,0x90,0x0F,0x31,0x28,0x80,0x42,0x28,0x82,0x62,0x28,0x81,0x52,0x28,0x83,0x38,0x94,0x43,0x05,0x54,0x42,0x02,0xAA,0xA0,0x1A,0x6A,0xA0,0x16,0xEA,0xA0,0x1E,0x1A,0xA0,0x11,0x9A,0xA0,0x19,0x5A,0xA0,0x15,0xDA,0xA0,0x1D,0x3A,0xA0,0x13,0xBA,0xA0,0x1B,0x7A,0xA0,0x17,0xFA,0xA0,0x1F,0x06,0x60,0x10,0x86,0x60,0x18,0x46,0x60,0x14,0xC6,0x60,0x1C,0x26,0x20,0x09,0x93,0x30,0x05,0xD3,0x30,0x03,0xB3,0x30,0x07,0xF3,0xB0,0x00,0x8B,0xB0,0x04,0xCB,0xB0,0x02,0xAB,0xB0,0x06,0xEB,0xB0,0x01,0x29,0xD8,0x84,0x2D,0xD8,0x86,0x1D,0xD8,0x85,0x3D,0xD8,0x87,0x03,0x38,0x84,0x23,0x38,0x86,0x13,0x38,0x85,0x33,0x38,0x87,0x0B,0xB8,0x84,0x34,0x5C,0xC1,0x35,0xDC,0xC0,0x2D,0xDC,0xC1,0x3D,0x3C,0xC0,0x23,0x3C,0xC1,0x33,0xBC,0xC0,0x2B,0xBC,0xC1,0x3B,0x7C,0xC0,0x27,0x7C,0xC1,0x37,0x64,0xE0,0xFF,0xD3,0xF0,0x0B,0x29,0x4A,0xD8,0x68
-
-		// 1193 - -- OP_ClientCmdMsg::OP_EqUpdateMerchantCmd --
-		// /*0x00,0x3A,*/0x38,0x00,0x00,0x00,0xFF,0x77,0x02,0xA6,0xAA,0x00,0x00,0x00,0x00,0x00,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x3F,0x00,0x00,0x00,0x00,0xA8,0x55,0xEC,0x8F,0x7F,0x70,0x31,0x08,0x40,0x71,0x3A,0x8B,0xB4,0x55,0xEC,0x8F,0x00
-	/*};
-
-	Seperator* sep2 = new Seperator(command_parms->data.c_str(), ' ', 50, 500, true);
-	int8 val = 0;
-	int16 pos = 0;
-	int idx = 0;
-	while(sep2 && sep2->arg[idx+1] && sep2->IsNumber(idx) && sep2->IsNumber(idx+1)){
-		pos = atoi(sep2->arg[idx]);
-		val = atoi(sep2->arg[idx+1]);
-		memset(blah+pos, val, 1);
-		idx+=2;
+	if (sep->IsSet(0) && sep->IsNumber(0)) {
+		client->GetPlayer()->SetActionState(atol(sep->arg[0]));
 	}
 
-	DumpPacket(blah, sizeof(blah));
-	client->QueuePacket(new EQ2Packet(OP_GroupCreatedMsg , blah, sizeof(blah)));*/
+	if (sep->IsSet(1) && sep->IsNumber(1)) {
+		client->GetPlayer()->SetVisualState(atol(sep->arg[1]));
+	}*/
+	/*if (sep->IsSet(0) && sep->IsNumber(0)) {
+		client->GetPlayer()->size_mod_a = atol(sep->arg[0]);
+	}
+
+	if (sep->IsSet(1) && sep->IsNumber(1)) {
+		client->GetPlayer()->size_mod_b = atol(sep->arg[1]);
+	}
+
+	if (sep->IsSet(2) && sep->IsNumber(2)) {
+		client->GetPlayer()->size_mod_c = atol(sep->arg[2]);
+	}
+
+	if (sep->IsSet(3) && sep->IsNumber(3)) {
+		client->GetPlayer()->size_shrink_multiplier = atol(sep->arg[3]);
+	}
+
+	if (sep->IsSet(4) && sep->IsNumber(4)) {
+		client->GetPlayer()->size_mod_unknown = atol(sep->arg[3]);
+	}*/
+
+	if (sep->IsSet(0) && sep->IsNumber(0))
+		client->GetPlayer()->temp_status = atol(sep->arg[0]);
+
+	client->QueuePacket(client->GetPlayer()->GetSpellBookUpdatePacket(client->GetVersion()));
 }
 
 void Commands::Command_LeaveChannel(Client *client, Seperator *sep) {
@@ -7935,7 +8092,7 @@ void Commands::Command_Attune_Inv(Client* client, Seperator* sep) {
 
 		// Get the item
 		Item* item = client->GetPlayer()->item_list.indexed_items[index];
-		if(item) {
+		if (item) {
 			// Valid item lets check to make sure this item is attunable, if not return out
 			if (!item->CheckFlag(ATTUNEABLE)) {
 				LogWrite(ITEM__DEBUG, 0, "Items", "attune_inv called for an item that is not attunable (%s)", item->name.c_str());
@@ -7954,9 +8111,9 @@ void Commands::Command_Attune_Inv(Client* client, Seperator* sep) {
 			vector<EQ2Packet*> packets = client->GetPlayer()->EquipItem(index, client->GetVersion(), -1);
 			EQ2Packet* outapp = 0;
 
-			for (int32 i=0;i<packets.size();i++) {
+			for (int32 i = 0; i < packets.size(); i++) {
 				outapp = packets[i];
-				if(outapp)
+				if (outapp)
 					client->QueuePacket(outapp);
 			}
 		}
@@ -8020,6 +8177,54 @@ void Commands::Command_Player_Set(Client* client, Seperator* sep) {
 				value = atoi(sep->arg[1]);
 				player->SetFame(value);
 				player->GetZone()->GetClientBySpawn(player)->SendTitleUpdate();
+				return;
+			}
+		} else if (strncasecmp(attribute, "str", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->str_temp = atoi(sep->arg[1]);
+				player->CalculateBonuses();
+				return;
+			}
+		} else if (strncasecmp(attribute, "sta", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->sta_temp = atoi(sep->arg[1]);
+				player->CalculateBonuses();
+				return;
+			}
+		} else if (strncasecmp(attribute, "agi", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->agi_temp = atoi(sep->arg[1]);
+				player->CalculateBonuses();
+				return;
+			}
+		} else if (strncasecmp(attribute, "wis", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->wis_temp = atoi(sep->arg[1]);
+				player->CalculateBonuses();
+				return;
+			}
+		} else if (strncasecmp(attribute, "int", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->intel_temp = atoi(sep->arg[1]);
+				player->CalculateBonuses();
+				return;
+			}
+		} else if (strncasecmp(attribute, "crit", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->crit_chance_temp = atof(sep->arg[1]);
+				player->CalculateBonuses();
+				return;
+			}
+		} else if (strncasecmp(attribute, "reuse", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->reuse_speed_temp = atof(sep->arg[1]);
+				player->CalculateBonuses();
+				return;
+			}
+		} else if (strncasecmp(attribute, "castspeed", strlen(attribute)) == 0) {
+			if (sep->IsNumber(1)) {
+				player->GetInfoStruct()->casting_speed_temp = atof(sep->arg[1]);
+				player->CalculateBonuses();
 				return;
 			}
 		}
@@ -8202,4 +8407,47 @@ void Commands::Command_PVP(Client* client) {
 	client->SimpleMessage(CHANNEL_COLOR_WHITE, "PVP Statistics");
 	client->Message(CHANNEL_COLOR_WHITE, "Kills: %i", client->GetPlayer()->GetPlayerStatisticValue(STAT_PLAYER_TOTAL_PVP_KILLS));
 	client->Message(CHANNEL_COLOR_WHITE, "Deaths: %i", client->GetPlayer()->GetPlayerStatisticValue(STAT_PLAYER_TOTAL_PVP_DEATHS));
+}
+
+void Commands::Command_KnowledgeWindow_Sort(Client* client, Seperator* sep) {
+	if (sep && sep->arg[0] && sep->arg[1] && sep->arg[2] && sep->arg[3] && sep->arg[4]) {
+		int8 tab = atoi(sep->arg[0]);
+		int8 sort_by = atoi(sep->arg[1]);
+		bool reverse = atoi(sep->arg[2]);
+		int8 fill_style = atoi(sep->arg[3]);
+		bool max_level_only = atoi(sep->arg[4]);
+
+		client->GetPlayer()->SortSpellBook();
+		ClientPacketFunctions::SendSkillSlotMappings(client);
+	}
+}
+
+void Commands::Command_Heal(Client* client) {
+	Player* player = client->GetPlayer();
+
+	if (client->GetPlayer()->GetTarget() && client->GetPlayer()->GetTarget()->IsPlayer())
+		player = client->GetCurrentZone()->GetClientBySpawn(client->GetPlayer()->GetTarget())->GetPlayer();
+
+	if (!player->Alive()) {
+		Spell* spell = master_spell_list.GetSpell(1002182, 1);
+		LuaSpell* lua_spell = nullptr;
+
+		if (spell && lua_interface) {
+			lua_spell = lua_interface->GetSpell(spell->GetSpellData()->lua_script.c_str());
+		}
+
+		if (lua_spell) {
+			lua_spell->caster = client->GetPlayer();
+			lua_spell->initial_target = player->GetID();
+			lua_spell->spell = spell;
+
+			client->GetCurrentZone()->GetSpellProcess()->GetSpellTargets(lua_spell);
+			client->GetCurrentZone()->GetSpellProcess()->CastProcessedSpell(lua_spell, true);
+		}
+	} else {
+		int32 heal_amount = player->GetTotalHP() - player->GetHP();
+
+		if (heal_amount > 0)
+			client->GetPlayer()->ProcHeal(player, "Heal", heal_amount, heal_amount, "Dev Heal");
+	}
 }

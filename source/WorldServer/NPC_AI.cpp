@@ -96,17 +96,19 @@ void Brain::Think() {
 				ClearHate();
 				// Clear the encounter list
 				ClearEncounter();
+				// Remove the spells from the spawn
+				m_body->GetZone()->RemoveSpellTimersFromSpawn(m_body, true, true);
 			}
 			else {
 				// Still within max chase distance lets to the combat stuff now
-
 				float distance = m_body->GetDistance(target);
-				distance -= target->appearance.pos.collision_radius / 10;
-				distance -= m_body->appearance.pos.collision_radius / 10;
 
 				if(!m_body->IsCasting() && (!HasRecovered() || !ProcessSpell(target, distance))) {
 					LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "%s is attempting melee on %s.", m_body->GetName(), target->GetName());
-					m_body->FaceTarget(target);
+
+					if (!m_body->IsMezzedOrStunned() || !m_body->IsFeared())
+						m_body->FaceTarget(target);
+
 					ProcessMelee(target, distance);
 				}
 			}
@@ -131,7 +133,7 @@ void Brain::Think() {
 				m_body->Runback();
 			}
 			// If encounter size is greater then 0 then clear it
-			if (GetEncounterSize() >= 0)
+			if (GetEncounterSize() > 0)
 				ClearEncounter();
 		}
 	}
@@ -156,7 +158,7 @@ sint32 Brain::GetHate(Entity* entity) {
 	return ret;
 }
 
-void Brain::AddHate(Entity* entity, sint32 hate) {
+void Brain::AddHate(Entity* entity, sint32 hate, bool unprovoked) {
 	// Lock the hate list, we are altering the list so use write lock
 	MHateList.writelock(__FUNCTION__, __LINE__);
 
@@ -165,16 +167,33 @@ void Brain::AddHate(Entity* entity, sint32 hate) {
 	else
 		m_hatelist.insert(std::pair<int32, sint32>(entity->GetID(), hate));
 
+	if (entity->HatedBy.count(m_body->GetID()) == 0)
+		entity->HatedBy.insert(m_body->GetID());
+
+	if (entity->IsPlayer())
+		static_cast<Player*>(entity)->AddToEncounterList(m_body->GetID(), Timer::GetCurrentTime2(), !unprovoked);
+
 	// Unlock the list
 	MHateList.releasewritelock(__FUNCTION__, __LINE__);
 }
 
 void Brain::ClearHate() {
-	// Lock the hate list, we are altering the list so use a write lock
 	MHateList.writelock(__FUNCTION__, __LINE__);
-	// Clear the list
+
+	for (auto& kv : m_hatelist) {
+		ZoneServer* zone = m_body->GetZone();
+		Spawn* spawn = zone->GetSpawnByID(kv.first);
+
+		if (spawn && spawn->IsEntity()) {
+			static_cast<Entity*>(spawn)->HatedBy.erase(m_body->GetID());
+
+			if (spawn->IsPlayer())
+				static_cast<Player*>(spawn)->RemoveFromEncounterList(m_body->GetID());
+		}
+	}
+
 	m_hatelist.clear();
-	// Unlock the hate list
+
 	MHateList.releasewritelock(__FUNCTION__, __LINE__);
 }
 
@@ -186,6 +205,8 @@ void Brain::ClearHate(Entity* entity) {
 	if (m_hatelist.count(entity->GetID()) > 0)
 		// Erase the entity from the hate list
 		m_hatelist.erase(entity->GetID());
+
+	entity->HatedBy.erase(m_body->GetID());
 
 	// Unlock the hate list
 	MHateList.releasewritelock(__FUNCTION__, __LINE__);
@@ -203,7 +224,7 @@ Entity* Brain::GetMostHated() {
 		// Loop through the list looking for the entity that this NPC hates the most
 		for(itr = m_hatelist.begin(); itr != m_hatelist.end(); itr++) {
 			// Compare the hate value for the current iteration to our stored highest value
-			if(itr->second > hate) {
+			if(!hate || itr->second > hate) {
 				// New high value store the entity
 				ret = itr->first;
 				// Store the value to compare with the rest of the entities
@@ -294,7 +315,7 @@ bool Brain::ProcessSpell(Entity* target, float distance) {
 		else
 			spell_target = target;
 		m_body->GetZone()->ProcessSpell(spell, m_body, spell_target);
-		m_spellRecovery = (int32)(Timer::GetCurrentTime2() + (spell->GetSpellData()->cast_time * 10) + (spell->GetSpellData()->recovery * 10) + 2000);
+		m_spellRecovery = (int32)(Timer::GetCurrentTime2() + (spell->GetModifiedCastTime(m_body) * 10) + (spell->GetSpellData()->recovery * 10) + 2000);
 		return true;
 	}
 	return false;
@@ -308,7 +329,7 @@ bool Brain::CheckBuffs() {
 	if (spell) {
 		m_body->CalculateRunningLocation(true);
 		m_body->GetZone()->ProcessSpell(spell, m_body, m_body);
-		m_spellRecovery = (int32)(Timer::GetCurrentTime2() + (spell->GetSpellData()->cast_time * 10) + (spell->GetSpellData()->recovery * 10) + 2000);
+		m_spellRecovery = (int32)(Timer::GetCurrentTime2() + (spell->GetModifiedCastTime(m_body) * 10) + (spell->GetSpellData()->recovery * 10) + 2000);
 		return true;
 	}
 	return false;
@@ -318,20 +339,22 @@ void Brain::ProcessMelee(Entity* target, float distance) {
 	if(distance > MAX_COMBAT_RANGE)
 		MoveCloser(target);
 	else {
+		if (target) {
 		LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "%s is within melee range of %s.", m_body->GetName(), target->GetName());
-		if(target && m_body->AttackAllowed(target)) {
+			if (m_body->AttackAllowed(target)) {
 			LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "%s is allowed to attack %s.", m_body->GetName(), target->GetName());
-			if(m_body->PrimaryWeaponReady() && !m_body->IsDazed() && !m_body->IsFeared()) {
+				if (m_body->PrimaryWeaponReady() && !m_body->IsDazed() && !m_body->IsFeared()) {
 				LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "%s swings its primary weapon at %s.", m_body->GetName(), target->GetName());
 				m_body->SetPrimaryLastAttackTime(Timer::GetCurrentTime2());
 				m_body->MeleeAttack(target, distance, true);
 				m_body->GetZone()->CallSpawnScript(m_body, SPAWN_SCRIPT_AUTO_ATTACK_TICK, target);
 			}
-			if(m_body->SecondaryWeaponReady() && !m_body->IsDazed()) {
+				if (m_body->SecondaryWeaponReady() && !m_body->IsDazed()) {
 				m_body->SetSecondaryLastAttackTime(Timer::GetCurrentTime2());
 				m_body->MeleeAttack(target, distance, false);
 			}
 		}
+	}
 	}
 }
 
@@ -349,9 +372,9 @@ void Brain::AddToEncounter(Entity* entity) {
 	if (entity->IsPet() && ((NPC*)entity)->GetOwner()->IsPlayer())
 		entity = ((NPC*)entity)->GetOwner();
 
-	// If player then get the players group
+	// If player or bot then get the group
 	int32 group_id = 0;
-	if (entity->IsPlayer()) {
+	if (entity->IsPlayer() || entity->IsBot()) {
 		m_playerInEncounter = true;
 		if (entity->GetGroupMemberInfo())
 			group_id = entity->GetGroupMemberInfo()->group_id;
@@ -365,8 +388,10 @@ void Brain::AddToEncounter(Entity* entity) {
 
 		deque<GroupMemberInfo*>::iterator itr;
 		deque<GroupMemberInfo*>* members = world.GetGroupManager()->GetGroupMembers(group_id);
-		for (itr = members->begin(); itr != members->end(); itr++)
-			m_encounter.push_back((*itr)->client->GetPlayer()->GetID());
+		for (itr = members->begin(); itr != members->end(); itr++) {
+			if (entity->GetZone() == (*itr)->client->GetPlayer()->GetZone())
+				m_encounter.push_back((*itr)->client->GetPlayer()->GetID());
+		}
 
 		world.GetGroupManager()->ReleaseGroupLock(__FUNCTION__, __LINE__);
 	}
@@ -456,14 +481,10 @@ void CombatPetBrain::Think() {
 	if (GetBody()->GetOwner()->IsPlayer() && ((Player*)GetBody()->GetOwner())->GetInfoStruct()->pet_movement == 1)
 		return;
 
-	// Set target to owner
 	Entity* target = GetBody()->GetOwner();
-	GetBody()->SetTarget(target);
 
 	// Get distance from the owner
 	float distance = GetBody()->GetDistance(target);
-	distance -= target->appearance.pos.collision_radius / 10;
-	distance -= GetBody()->appearance.pos.collision_radius / 10;
 
 	// If out of melee range then move closer
 	if (distance > MAX_COMBAT_RANGE)
@@ -490,14 +511,10 @@ void NonCombatPetBrain::Think() {
 	
 	LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "Pet AI code called for %s", GetBody()->GetName());
 
-	// Set target to owner
 	Entity* target = GetBody()->GetOwner();
-	GetBody()->SetTarget(target);
 
 	// Get distance from the owner
 	float distance = GetBody()->GetDistance(target);
-	distance -= target->appearance.pos.collision_radius / 10;
-	distance -= GetBody()->appearance.pos.collision_radius / 10;
 
 	// If out of melee range then move closer
 	if (distance > MAX_COMBAT_RANGE)
@@ -574,12 +591,13 @@ void DumbFirePetBrain::Think() {
 			}
 
 			float distance = GetBody()->GetDistance(target);
-			distance -= target->appearance.pos.collision_radius / 10;
-			distance -= GetBody()->appearance.pos.collision_radius / 10;
 
 			if(!GetBody()->IsCasting() && (!HasRecovered() || !ProcessSpell(target, distance))) {
 				LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "%s is attempting melee on %s.", GetBody()->GetName(), target->GetName());
-				GetBody()->FaceTarget(target);
+
+				if (!m_body->IsMezzedOrStunned() || !m_body->IsFeared())
+					GetBody()->FaceTarget(target);
+
 				ProcessMelee(target, distance);
 			}
 		}

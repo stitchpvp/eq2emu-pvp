@@ -32,8 +32,8 @@ using namespace std;
 
 #ifdef WIN32
 #include <process.h>
+#include <WinSock2.h>
 #include <windows.h>
-#include <winsock.h>
 
 #define snprintf	_snprintf
 #define vsnprintf	_vsnprintf
@@ -100,6 +100,12 @@ LoginServer::LoginServer(const char* iAddress, int16 iPort) {
 	minGameFullStatus = 100;
 	update_server_verified = false;
 	last_checked_time = 0;
+	UpdateServerPort = 0;
+	UpdateServerIP = 0;
+	update_server_completed = false;
+	data_waiting = 0;
+	zone_updates = 0;
+	loginEquip_updates = 0;
 }
 
 LoginServer::~LoginServer() {
@@ -562,7 +568,7 @@ void LoginServer::ProcessTableUpdate(uchar* data) {
 
 int32 LoginServer::ProcessTableUpdates(uchar* data) {
 	int32 ret = 0;
-	LatestTableVersions table_versions;
+	/*LatestTableVersions table_versions;
 	table_versions.DeSerialize(data);
 	int32 total_tables = table_versions.GetTotalTables();
 	
@@ -601,13 +607,13 @@ int32 LoginServer::ProcessTableUpdates(uchar* data) {
 		}
 		SendPacket(outpack);
 		safe_delete(outpack);
-	}
+	}*/
 	return ret;
 }
 
 int32 LoginServer::ProcessDataUpdates(uchar* data) {
 	int32 ret = 0;
-	LatestTableVersions table_versions;
+	/*LatestTableVersions table_versions;
 	table_versions.DeSerialize(data);
 	int32 total_tables = table_versions.GetTotalTables();
 	vector<ServerPacket*> packet_requests;
@@ -646,7 +652,7 @@ int32 LoginServer::ProcessDataUpdates(uchar* data) {
 		}
 		SendPacket(outpack);
 		safe_delete(outpack);
-	}
+	}*/
 	return ret;
 }
 

@@ -38,6 +38,7 @@ extern ZoneList zone_list;
 	#ifndef snprintf
 		#define snprintf sprintf_s
 	#endif
+#include <WinSock2.h>
 	#include <Windows.h>
 #else
 #endif
@@ -164,9 +165,9 @@ static FILE * OpenLogFile() {
 	}
 
 #ifdef NO_PIDLOG
-	snprintf(file, FILENAME_MAX, LOG_DIR"/%04i-%02i-%02i_eq2"EXE_NAME".log", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
+	snprintf(file, FILENAME_MAX, LOG_DIR"/%04i-%02i-%02i_eq2" EXE_NAME ".log", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
 #else
-	snprintf(file, FILENAME_MAX, LOG_DIR"/%04i-%02i-%02i_eq2"EXE_NAME"_%04i.log", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, getpid());
+	snprintf(file, FILENAME_MAX, LOG_DIR"/%04i-%02i-%02i_eq2" EXE_NAME "_%04i.log", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, getpid());
 #endif
 
 	if ((f = fopen(file, "a")) == NULL) {
@@ -306,7 +307,7 @@ static void LogQueueAdd(LogType log_type, char *text, int len, const char *cat_t
 
 	if ((logq = (logq_t *)calloc(1, sizeof(logq_t))) == NULL) {
 		free(text);
-		fprintf(stderr, "%s: %u: Unable to allocate %u bytes\n", __FUNCTION__, __LINE__, sizeof(logq_t));
+		fprintf(stderr, "%s: %u: Unable to allocate %zu bytes\n", __FUNCTION__, __LINE__, sizeof(logq_t));
 		return;
 	}
 

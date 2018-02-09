@@ -103,6 +103,12 @@ TCPConnection::TCPConnection(bool iOldFormat, TCPServer* iRelayServer, eTCPMode 
 	pRunLoop = false;
 	charAsyncConnect = 0;
 	pAsyncConnect = false;
+	connection_socket = 0;
+	recvbuf_size = 0;
+	recvbuf_used = 0;
+	recvbuf_echo = 0;
+	sendbuf_size = 0;
+	sendbuf_used = 0;
 #if TCPN_DEBUG_Memory >= 7
 	cout << "Constructor #1 on outgoing TCP# " << GetID() << endl;
 #endif
@@ -121,6 +127,7 @@ TCPConnection::TCPConnection(TCPServer* iServer, SOCKET in_socket, int32 irIP, i
 	pState = TCPS_Connected;
 	pFree = false;
 	pEcho = false;
+	sock = 0;
 	connection_socket = in_socket;
 	rIP = irIP;
 	rPort = irPort;
@@ -131,6 +138,11 @@ TCPConnection::TCPConnection(TCPServer* iServer, SOCKET in_socket, int32 irIP, i
 	pRunLoop = false;
 	charAsyncConnect = 0;
 	pAsyncConnect = false;
+	recvbuf_size = 0;
+	recvbuf_used = 0;
+	recvbuf_echo = 0;
+	sendbuf_size = 0;
+	sendbuf_used = 0;
 #if TCPN_DEBUG_Memory >= 7
 	cout << "Constructor #2 on outgoing TCP# " << GetID() << endl;
 #endif
@@ -151,6 +163,7 @@ TCPConnection::TCPConnection(TCPServer* iServer, TCPConnection* iRelayLink, int3
 	pState = TCPS_Connected;
 	pFree = false;
 	pEcho = false;
+	sock = 0;
 	connection_socket = 0;
 	rIP = irIP;
 	rPort = irPort;
@@ -161,6 +174,11 @@ TCPConnection::TCPConnection(TCPServer* iServer, TCPConnection* iRelayLink, int3
 	pRunLoop = false;
 	charAsyncConnect = 0;
 	pAsyncConnect = false;
+	recvbuf_size = 0;
+	recvbuf_used = 0;
+	recvbuf_echo = 0;
+	sendbuf_size = 0;
+	sendbuf_used = 0;
 #if TCPN_DEBUG_Memory >= 7
 	cout << "Constructor #3 on outgoing TCP# " << GetID() << endl;
 #endif
@@ -1549,7 +1567,7 @@ bool TCPServer::Open(int16 in_port, char* errbuf) {
 	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &reuse_addr, sizeof(reuse_addr));
 
 
-	if (bind(sock, (struct sockaddr *) &address, sizeof(address)) < 0) {
+	if (::bind(sock, (struct sockaddr *) &address, sizeof(address)) < 0) {
 #ifdef WIN32
 		closesocket(sock);
 #else

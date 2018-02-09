@@ -337,6 +337,7 @@ public:
 	void ViewGuildMemberPoints(Client* client, const char* name);
 	bool ChangeMemberFlag(Client* client, int8 member_flag, int8 value, bool send_packet = true);
 	bool UpdateGuildMemberInfo(Player* player);
+	bool UpdateGuildStatus(Player *player, int32 Status);
 	void AddGuildEvent(int64 event_id, int32 type, const char* description, int32 date, int8 locked);
 	void AddNewGuildEvent(int32 type, const char* description, int32 date, bool send_packet = true, ...);
 	bool LockGuildEvent(int64 event_id, bool lock, bool send_packet = true);

@@ -92,17 +92,41 @@
     <Filter Include="Source Files\Housing">
       <UniqueIdentifier>{5ffc936d-d1f9-4219-af84-f5ba0375c6cd}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\HeroicOp">
-      <UniqueIdentifier>{f150d08f-d438-4d95-bd34-e7525ca75f75}</UniqueIdentifier>
+    <Filter Include="Header Files\RaceTypes">
+      <UniqueIdentifier>{cb0ea567-92f2-43da-8d7c-db27cdb4f09d}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\RaceTypes">
-      <UniqueIdentifier>{7a3fbf7e-7680-44d6-aad9-c8786edc55e9}</UniqueIdentifier>
+      <UniqueIdentifier>{387b255d-dcd9-41c2-b568-36762f1b096e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\HeroicOp">
+      <UniqueIdentifier>{3fdda05a-53d3-441c-a153-07ef811d676b}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files\HeroicOp">
-      <UniqueIdentifier>{72e17d5c-eff2-4104-894a-a112a8150ab4}</UniqueIdentifier>
+      <UniqueIdentifier>{e346a00a-fea8-41e2-8376-102aed344a46}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\RaceTypes">
-      <UniqueIdentifier>{efcce842-424b-4cc1-8ec0-598591db11fa}</UniqueIdentifier>
+    <Filter Include="Source Files\Zone">
+      <UniqueIdentifier>{336a3c4a-ec95-42b7-b05b-a5298f093102}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Zone">
+      <UniqueIdentifier>{eb29a311-6097-49be-8ef4-07479bda60b3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\LUA">
+      <UniqueIdentifier>{18bd779d-df1a-451e-978e-1aa865471b08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\LUA">
+      <UniqueIdentifier>{0ace3e54-1c82-4073-8411-a6b26127b2f8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Patch">
+      <UniqueIdentifier>{2a4e5daa-ea00-4675-8c2d-1c35472e7568}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Patch">
+      <UniqueIdentifier>{426cef00-2d5d-41c3-93fb-24fffb144d89}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Bots">
+      <UniqueIdentifier>{b19ff34b-77a4-4981-9768-0d83edb11348}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Bots">
+      <UniqueIdentifier>{dab11483-a0fd-48b9-934e-29528b28f242}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -361,11 +385,14 @@
     <ClCompile Include="..\..\source\WorldServer\AltAdvancement\AltAdvancementDB.cpp">
       <Filter>Source Files\AltAdvancement</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Housing\HousingDB.cpp">
+      <Filter>Source Files\Housing</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\source\WorldServer\Housing\HousingPackets.cpp">
       <Filter>Source Files\Housing</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\WorldServer\Housing\HousingDB.cpp">
-      <Filter>Source Files\Housing</Filter>
+    <ClCompile Include="..\..\source\WorldServer\RaceTypes\RaceTypes.cpp">
+      <Filter>Source Files\RaceTypes</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\WorldServer\HeroicOp\HeroicOp.cpp">
       <Filter>Source Files\HeroicOp</Filter>
@@ -376,19 +403,143 @@
     <ClCompile Include="..\..\source\WorldServer\HeroicOp\HeroicOpPackets.cpp">
       <Filter>Source Files\HeroicOp</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\WorldServer\RaceTypes\RaceTypes.cpp">
-      <Filter>Source Files\RaceTypes</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\source\WorldServer\RaceTypes\RaceTypesDB.cpp">
       <Filter>Source Files\RaceTypes</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\WorldServer\PlayerGroups.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Zone\SPGrid.cpp">
+      <Filter>Source Files\Zone</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Patch\patch.cpp">
+      <Filter>Source Files\Patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Patch\tcp.cpp">
+      <Filter>Source Files\Patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Patch\tcp-client.cpp">
+      <Filter>Source Files\Patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Patch\buffer.cpp">
+      <Filter>Source Files\Patch</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lapi.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lauxlib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lbaselib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lbitlib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lcode.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lcorolib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lctype.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\ldblib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\ldebug.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\ldo.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\ldump.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lfunc.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lgc.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\linit.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\liolib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\llex.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lmathlib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lmem.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\loadlib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lobject.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lopcodes.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\loslib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lparser.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lstate.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lstring.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lstrlib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\ltable.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\ltablib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\ltm.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lundump.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lutf8lib.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lvm.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\LUA\lzio.c">
+      <Filter>Source Files\LUA</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\source\WorldServer\PVP.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\WorldServer\MasterServer.cpp">
+    <ClCompile Include="..\..\source\WorldServer\Bots\Bot.cpp">
+      <Filter>Source Files\Bots</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Bots\BotBrain.cpp">
+      <Filter>Source Files\Bots</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Bots\BotCommands.cpp">
+      <Filter>Source Files\Bots</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Bots\BotDB.cpp">
+      <Filter>Source Files\Bots</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\Trade.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -672,23 +823,118 @@
     <ClInclude Include="..\..\source\WorldServer\AltAdvancement\AltAdvancement.h">
       <Filter>Header Files\AltAdvancement</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\WorldServer\HeroicOp\HeroicOp.h">
-      <Filter>Header Files\HeroicOp</Filter>
+    <ClInclude Include="..\..\source\WorldServer\Appearances.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\WorldServer\RaceTypes\RaceTypes.h">
       <Filter>Header Files\RaceTypes</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\HeroicOp\HeroicOp.h">
+      <Filter>Header Files\HeroicOp</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\source\WorldServer\PlayerGroups.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\WorldServer\Items\Items_DoV.h">
-      <Filter>Header Files\Items</Filter>
+    <ClInclude Include="..\..\source\WorldServer\Zone\SPGrid.h">
+      <Filter>Header Files\Zone</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\Patch\patch.h">
+      <Filter>Header Files\Patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\Patch\tcp.h">
+      <Filter>Header Files\Patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\Patch\tcp-client.h">
+      <Filter>Header Files\Patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\Patch\buffer.h">
+      <Filter>Header Files\Patch</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lapi.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lauxlib.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lcode.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lctype.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\ldebug.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\ldo.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lfunc.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lgc.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\llex.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\llimits.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lmem.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lobject.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lopcodes.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lparser.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lprefix.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lstate.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lstring.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\ltable.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\ltm.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lua.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\luaconf.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lualib.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lundump.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lvm.h">
+      <Filter>Header Files\LUA</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\LUA\lzio.h">
+      <Filter>Header Files\LUA</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\WorldServer\PVP.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\WorldServer\MasterServer.h">
       <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\source\WorldServer\Bots\Bot.h">
+      <Filter>Header Files\Bots</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\Bots\BotBrain.h">
+      <Filter>Header Files\Bots</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

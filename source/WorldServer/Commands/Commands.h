@@ -242,6 +242,7 @@ public:
 		required_status = in_status;
 	}
 	EQ2_RemoteCommandString(uchar* buffer, int32 size){
+		required_status = 0;
 		InitializeLoadData(buffer, size);
 		LoadData(handler);
 		LoadDataString(command);
@@ -395,7 +396,7 @@ public:
 	void Command_StationMarketPlace(Client* client, Seperator* sep);
 	void Command_StopEating(Client* client);
 	void Command_StopDrinking(Client* client);
-	void Command_Test(Client* client, EQ2_16BitString* command_parms);
+	void Command_Test(Client* client, Seperator* sep);
 	void Command_Title(Client* client);
 	void Command_TitleList(Client* client);
 	void Command_TitleSetPrefix(Client* client, Seperator* sep);
@@ -433,6 +434,9 @@ public:
 	void Command_JoinChannel(Client *client, Seperator *sep);
 	void Command_JoinChannelFromLoad(Client *client, Seperator *sep);
 	void Command_TellChannel(Client *client, Seperator *sep);
+	void Command_Mount(Client* client, Seperator* sep);
+	void Command_ResetEncounter(Client* client);
+	void Command_Knockback(Client* client, Seperator* sep);
 	void Command_LeaveChannel(Client *client, Seperator *sep);
 	void Command_WeaponStats(Client *client);
 	void Command_WhoChannel(Client *client, Seperator *sep);
@@ -456,11 +460,24 @@ public:
 	void Command_AcceptResurrection(Client* client, Seperator* sep);
 	void Command_DeclineResurrection(Client* client, Seperator* set);
 
+	// Bot Commands
+	void Command_Bot(Client* client, Seperator* sep);
+	void Command_Bot_Create(Client* client, Seperator* sep);
+	void Command_Bot_Customize(Client* client, Seperator* sep);
+	void Command_Bot_Spawn(Client* client, Seperator* sep);
+	void Command_Bot_List(Client* client, Seperator* sep);
+	void Command_Bot_Inv(Client* client, Seperator* sep);
+	void Command_Bot_Settings(Client* client, Seperator* sep);
+	void Command_Bot_Help(Client* client, Seperator* sep);
+
 	void Command_ServerFlag(Client* client, Seperator* sep);
 
 	void Command_PVPRange(Client* client);
 
 	void Command_PVP(Client* client);
+
+	void Command_KnowledgeWindow_Sort(Client* client, Seperator* sep);
+	void Command_Heal(Client* client);
 
 private:
 	RemoteCommands* remote_commands;
@@ -843,6 +860,17 @@ private:
 #define COMMAND_DECLINE_RESURRECTION    313
 #define COMMAND_WIND					314
 
+#define COMMAND_BOT						500
+#define COMMAND_BOT_CREATE				501
+#define COMMAND_BOT_CUSTOMIZE			502
+#define COMMAND_BOT_SPAWN				503
+#define COMMAND_BOT_LIST				504
+#define COMMAND_BOT_INV					505
+#define COMMAND_BOT_SETTINGS			506
+#define COMMAND_BOT_HELP				507
+
+#define COMMAND_KNOWLEDGEWINDOW_SORT		497
+
 #define COMMAND_MODIFY				1000 // INSERT INTO `commands`(`id`,`type`,`command`,`subcommand`,`handler`,`required_status`) VALUES ( NULL,'1','modify','','1000','200'); 
 #define COMMAND_MODIFY_CHARACTER	1001
 #define COMMAND_MODIFY_FACTION		1002
@@ -860,5 +888,9 @@ private:
 #define COMMAND_PLAYER_SET 2003
 #define COMMAND_PVP_RANGE 2004
 #define COMMAND_PVP 2005
+#define COMMAND_MOUNT 2006
+#define COMMAND_RESET_ENCOUNTER 2007
+#define COMMAND_KNOCKBACK 2008
+#define COMMAND_HEAL 2009
 
 #endif

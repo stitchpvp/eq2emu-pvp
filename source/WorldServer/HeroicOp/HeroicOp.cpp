@@ -30,6 +30,8 @@ HeroicOP::HeroicOP() {
 	m_currentStage = 0;
 	m_wheel = 0;
 	m_target = 0;
+	m_startTime = 0;
+	m_totalTime = 0;
 	m_shifted = false;
 	for (int8 i = 0; i < 6; i++)
 		countered[i] = 0;

@@ -17,14 +17,13 @@
     You should have received a copy of the GNU General Public License
     along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifdef WIN32
-	#include <windows.h>
-#endif
+
 #include "EQStreamFactory.h"
 #include "Log.h"
 
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
+	#include <windows.h>
 	#include <process.h>
 	#include <io.h>
 	#include <stdio.h>
@@ -121,7 +120,7 @@ struct sockaddr_in address;
 		return false;
 	}
 
-	if (bind(sock, (struct sockaddr *) &address, sizeof(address)) < 0) {
+	if (::bind(sock, (struct sockaddr *) &address, sizeof(address)) < 0) {
 		close(sock);
 		sock=-1;
 		return false;

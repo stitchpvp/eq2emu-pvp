@@ -32,6 +32,9 @@ GroundSpawn::GroundSpawn(){
 	appearance.encounter_level = 0;
 	spawn_type = 2;
 	appearance.pos.state = 129;
+	number_harvests = 0;
+	num_attempts_per_harvest = 0;
+	groundspawn_id = 0;
 	MHarvest.SetName("GroundSpawn::MHarvest");
 	MHarvestUse.SetName("GroundSpawn::MHarvestUse");
 }
@@ -78,9 +81,8 @@ const char* GroundSpawn::GetCollectionSkill(){
 	return collection_skill.c_str();
 }
 
-void GroundSpawn::ProcessHarvest(Client* client)
-{
-	LogWrite(GROUNDSPAWN__DEBUG, 0, "GSpawn", "Process harvesting for player '%s' (%u)", client->GetPlayer()->GetName(), client->GetPlayer()->GetID());
+void GroundSpawn::ProcessHarvest(Client* client) {
+	LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Process harvesting for player '%s' (%u)", client->GetPlayer()->GetName(), client->GetPlayer()->GetID());
 
 	MHarvest.lock();
 
@@ -103,60 +105,53 @@ void GroundSpawn::ProcessHarvest(Client* client)
 	int8	rare_item = 0;
 	bool	is_collection = false;
 
-	if(!groundspawn_entries || !groundspawn_items) 
-	{
-		LogWrite(GROUNDSPAWN__ERROR, 0, "GSpawn", "No groundspawn entries or items assigned to groundspawn id: %u", groundspawn_id);
+	if (!groundspawn_entries || !groundspawn_items) {
+		LogWrite(GROUNDSPAWN__ERROR, 3, "GSpawn", "No groundspawn entries or items assigned to groundspawn id: %u", groundspawn_id);
 		client->Message(CHANNEL_COLOR_RED, "Error: There are no groundspawn entries or items assigned to groundspawn id: %u", groundspawn_id);
 		MHarvest.unlock();
 		return;
 	}
 
-	if(number_harvests == 0) 
-	{
-		LogWrite(GROUNDSPAWN__DEBUG, 0, "GSpawn", "Total harvests depleated for groundspawn id: %u", groundspawn_id);
+	if (number_harvests == 0) {
+		LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Total harvests depleated for groundspawn id: %u", groundspawn_id);
 		client->SimpleMessage(CHANNEL_COLOR_RED, "Error: This spawn has nothing more to harvest!");
 		MHarvest.unlock();
 		return;
 	}
 
 	Skill* skill = 0;
-	if (collection_skill == "Collecting")
-	{
+	if (collection_skill == "Collecting") {
 		skill = client->GetPlayer()->GetSkillByName("Gathering");
 		is_collection = true;
 	}
 	else
 		skill = client->GetPlayer()->GetSkillByName(collection_skill.c_str(), true);
-	if(!skill) 
-	{
-		LogWrite(GROUNDSPAWN__WARNING, 0, "GSpawn", "Player '%s' lacks the skill: '%s'", client->GetPlayer()->GetName(), collection_skill.c_str());
+	if (!skill) {
+		LogWrite(GROUNDSPAWN__WARNING, 3, "GSpawn", "Player '%s' lacks the skill: '%s'", client->GetPlayer()->GetName(), collection_skill.c_str());
 		client->Message(CHANNEL_COLOR_RED, "Error: You do not have the '%s' skill!", collection_skill.c_str());
 		MHarvest.unlock();
 		return;
 	}
 
-	for(int8 i=0;i<num_attempts_per_harvest; i++) 
-	{
+	for (int8 i = 0; i < num_attempts_per_harvest; i++) {
 		vector<GroundSpawnEntry*> mod_groundspawn_entries;
 
-		if(groundspawn_entries) 
-		{
+		if (groundspawn_entries) {
 			vector<GroundSpawnEntry*> highest_match;
 			vector<GroundSpawnEntry*>::iterator itr;
 
 			GroundSpawnEntry* entry = 0;			// current data
 			GroundSpawnEntry* selected_table = 0;	// selected table data
 
-			// first, iterate through groundspawn_entries, discard tables player cannot use
-			for(itr = groundspawn_entries->begin(); itr != groundspawn_entries->end(); itr++) 
-			{
+													// first, iterate through groundspawn_entries, discard tables player cannot use
+			for (itr = groundspawn_entries->begin(); itr != groundspawn_entries->end(); itr++) {
 				entry = *itr;
 
 				// if player lacks skill, skip table
-				if( entry->min_skill_level > skill->current_val ) 
+				if (entry->min_skill_level > skill->current_val)
 					continue;
 				// if bonus, but player lacks level, skip table
-				if( entry->bonus_table && (client->GetPlayer()->GetLevel() < entry->min_adventure_level) )
+				if (entry->bonus_table && (client->GetPlayer()->GetLevel() < entry->min_adventure_level))
 					continue;
 
 				// build modified entries table
@@ -165,23 +160,20 @@ void GroundSpawn::ProcessHarvest(Client* client)
 			}
 
 			// if anything remains, find lowest min_skill_level in remaining set(s)
-			if(mod_groundspawn_entries.size() > 0) 
-			{
+			if (mod_groundspawn_entries.size() > 0) {
 				vector<GroundSpawnEntry*>::iterator itr;
 				GroundSpawnEntry* entry = 0;
 
-				for(itr = mod_groundspawn_entries.begin(); itr != mod_groundspawn_entries.end(); itr++) 
-				{
+				for (itr = mod_groundspawn_entries.begin(); itr != mod_groundspawn_entries.end(); itr++) {
 					entry = *itr;
 
 					// find the low range of available tables for random roll
-					if(lowest_skill_level > entry->min_skill_level || lowest_skill_level == 0)
+					if (lowest_skill_level > entry->min_skill_level || lowest_skill_level == 0)
 						lowest_skill_level = entry->min_skill_level;
 				}
 				LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Lowest Skill Level: %i", lowest_skill_level);
 			}
-			else
-			{
+			else {
 				// if no tables chosen, you must lack the skills
 				// TODO: move this check to LUA when harvest command is first selected
 				client->Message(CHANNEL_COLOR_RED, "You lack the skills to harvest this node!");
@@ -195,34 +187,31 @@ void GroundSpawn::ProcessHarvest(Client* client)
 			LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Random INT for Table by skill level: %i", table_choice);
 
 			int16 highest_score = 0;
-			for(itr = mod_groundspawn_entries.begin(); itr != mod_groundspawn_entries.end(); itr++) 
-			{
+			for (itr = mod_groundspawn_entries.begin(); itr != mod_groundspawn_entries.end(); itr++) {
 				entry = *itr;
 
 				// determines the highest min_skill_level in the current set of tables (if multiple tables)
-				if(table_choice >= entry->min_skill_level && (highest_score == 0 || highest_score < table_choice))
-				{
+				if (table_choice >= entry->min_skill_level && (highest_score == 0 || highest_score < table_choice)) {
 					// removes old highest for the new one
 					highest_match.clear();
 					highest_score = entry->min_skill_level;
 				}
 				// if the score = level, push into highest_match set
-				if(highest_score == entry->min_skill_level)
+				if (highest_score == entry->min_skill_level)
 					highest_match.push_back(entry);
 			}
 
 			// if there is STILL more than 1 table player qualifies for, rand() and pick one
-			if(highest_match.size() > 1){
-				int16 rand_index = rand()%highest_match.size();
+			if (highest_match.size() > 1) {
+				int16 rand_index = rand() % highest_match.size();
 				selected_table = highest_match.at(rand_index);
 			}
-			else if(highest_match.size() > 0)
+			else if (highest_match.size() > 0)
 				selected_table = highest_match.at(0);
 
 			// by this point, we should have 1 table who's min skill matches the score (selected_table)
-			if(selected_table)
-			{
-				LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Using Table: %i, %i, %i, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %i", 
+			if (selected_table) {
+				LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Using Table: %i, %i, %i, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %i",
 					selected_table->min_skill_level,
 					selected_table->min_adventure_level,
 					selected_table->bonus_table,
@@ -240,36 +229,30 @@ void GroundSpawn::ProcessHarvest(Client* client)
 				LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Random FLOAT for harvest percentages: %.2f", chance);
 
 				// starting with the lowest %, select a harvest type + reward qty
-				if(chance <= selected_table->harvest10 && is_collection == false) 
-				{
+				if (chance <= selected_table->harvest10 && is_collection == false) {
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Harvest 10 items + Rare Item from table : %i", selected_table->min_skill_level);
 					harvest_type = 6;
 					reward_total = 10;
 				}
-				else if(chance <= selected_table->harvest_rare && is_collection == false) 
-				{
+				else if (chance <= selected_table->harvest_rare && is_collection == false) {
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Harvest Rare Item from table : %i", selected_table->min_skill_level);
 					harvest_type = 5;
 				}
-				else if(chance <= selected_table->harvest_imbue && is_collection == false) 
-				{
+				else if (chance <= selected_table->harvest_imbue && is_collection == false) {
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Harvest Imbue Item from table : %i", selected_table->min_skill_level);
 					harvest_type = 4;
 				}
-				else if(chance <= selected_table->harvest5 && is_collection == false) 
-				{
+				else if (chance <= selected_table->harvest5 && is_collection == false) {
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Harvest 5 Items from table : %i", selected_table->min_skill_level);
 					harvest_type = 3;
 					reward_total = 5;
 				}
-				else if(chance <= selected_table->harvest3 && is_collection == false) 
-				{
+				else if (chance <= selected_table->harvest3 && is_collection == false) {
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Harvest 3 Items from table : %i", selected_table->min_skill_level);
 					harvest_type = 2;
 					reward_total = 3;
 				}
-				else if( chance <= selected_table->harvest1 || skill->current_val == skill->max_val || is_collection ) 
-				{
+				else if (chance <= selected_table->harvest1 || skill->current_val == skill->max_val || is_collection) {
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Harvest 1 Item from table : %i", selected_table->min_skill_level);
 					harvest_type = 1;
 				}
@@ -278,50 +261,50 @@ void GroundSpawn::ProcessHarvest(Client* client)
 			}
 
 			// once you know how many and what type of item to harvest, pick an item from the list
-			if(harvest_type) 
-			{
+			if (harvest_type) {
 				vector<GroundSpawnEntryItem*> mod_groundspawn_items;
 				vector<GroundSpawnEntryItem*> mod_groundspawn_rares;
+				vector<GroundSpawnEntryItem*> mod_groundspawn_imbue;
 
 				vector<GroundSpawnEntryItem*>::iterator itr;
 				GroundSpawnEntryItem* entry = 0;
 
 				// iterate through groundspawn_items, discard items player cannot roll for
-				for(itr = groundspawn_items->begin(); itr != groundspawn_items->end(); itr++) 
-				{
+				for (itr = groundspawn_items->begin(); itr != groundspawn_items->end(); itr++) {
 					entry = *itr;
 
 					// if this is a Rare, or an Imbue, but is_rare flag is 0, skip item
-					if( (harvest_type == 5 || harvest_type == 4) && entry->is_rare == 0 )
+					if ((harvest_type == 5 || harvest_type == 4) && entry->is_rare == 0)
 						continue;
 					// if it is a 1, 3, or 5 and is_rare = 1, skip
-					else if( harvest_type < 4 && entry->is_rare == 1 )
+					else if (harvest_type < 4 && entry->is_rare == 1)
 						continue;
 
 					// if the grid_id on the item matches player grid, or is 0, keep the item
-					if( !entry->grid_id || (entry->grid_id == client->GetPlayer()->appearance.pos.grid_id) )
-					{
+					if (!entry->grid_id || (entry->grid_id == client->GetPlayer()->appearance.pos.grid_id)) {
 						// build modified entries table
-						if( entry->is_rare )
-						{
-							// if the matching item is rare, push to mod rares
+						if ((entry->is_rare == 1 && harvest_type == 5) || (entry->is_rare == 1 && harvest_type == 6)) {
+							// if the matching item is rare, or harvest10 push to mod rares
 							mod_groundspawn_rares.push_back(entry);
+							LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Keeping groundspawn_rare_item: %u", entry->item_id);
 						}
-						else
-						{
-							// if the matching item is normal, push to mod items
+						if (entry->is_rare == 0 && harvest_type != 4 && harvest_type != 5) {
+							// if the matching item is normal,or harvest 10 push to mod items
 							mod_groundspawn_items.push_back(entry);
+							LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Keeping groundspawn_common_item: %u", entry->item_id);
 						}
-
-						LogWrite(GROUNDSPAWN__DEBUG, 5, "GSpawn", "Keeping groundspawn_item: %u", entry->item_id);
+						if (entry->is_rare == 2 && harvest_type == 4) {
+							// if the matching item is imbue item, push to mod imbue
+							mod_groundspawn_imbue.push_back(entry);
+							LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Keeping groundspawn_imbue_item: %u", entry->item_id);
+						}
 					}
 				}
 
 				// if any items remain in the list, random to see which one gets awarded
-				if(mod_groundspawn_items.size() > 0) 
-				{
+				if (mod_groundspawn_items.size() > 0) {
 					// roll to see which item index to use
-					item_choice = rand()%mod_groundspawn_items.size();
+					item_choice = rand() % mod_groundspawn_items.size();
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Random INT for which item to award: %i", item_choice);
 
 					// set item_id to be awarded
@@ -333,13 +316,11 @@ void GroundSpawn::ProcessHarvest(Client* client)
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Item ID to award: %u, Rare = %i", item_harvested, item_rare);
 
 					// if 10+rare, handle additional "rare" reward
-					if( harvest_type == 6 )
-					{
+					if (harvest_type == 6) {
 						// make sure there is a rare table to choose from!
-						if( mod_groundspawn_rares.size() > 0 ) 
-						{
+						if (mod_groundspawn_rares.size() > 0) {
 							// roll to see which rare index to use
-							rare_choice = rand()%mod_groundspawn_rares.size();
+							rare_choice = rand() % mod_groundspawn_rares.size();
 
 							// set (rare) item_id to be awarded 
 							rare_harvested = mod_groundspawn_rares[rare_choice]->item_id;
@@ -349,33 +330,56 @@ void GroundSpawn::ProcessHarvest(Client* client)
 
 							LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "RARE Item ID to award: %u", rare_harvested);
 						}
-						else
-						{
+						else {
 							// all rare entries were eliminated above, or none are assigned. Either way, shouldn't be here!
-							LogWrite(GROUNDSPAWN__ERROR, 0, "GSpawn", "Groundspawn Entry for '%s' (%i) has no RARE items!", GetName(), GetID());
+							LogWrite(GROUNDSPAWN__ERROR, 3, "GSpawn", "Groundspawn Entry for '%s' (%i) has no RARE items!", GetName(), GetID());
 						}
 					}
 				}
-				else
-				{
+				else if (mod_groundspawn_rares.size() > 0) {
+					// roll to see which rare index to use
+					item_choice = rand() % mod_groundspawn_rares.size();
+
+					// set (rare) item_id to be awarded 
+					item_harvested = mod_groundspawn_rares[item_choice]->item_id;
+
+					// we're picking a rare here, so obviously this is true ;)
+					rare_item = 1;
+
+					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "RARE Item ID to award: %u", rare_harvested);
+				}
+				else if (mod_groundspawn_imbue.size() > 0) {
+					// roll to see which rare index to use
+					item_choice = rand() % mod_groundspawn_imbue.size();
+
+					// set (rare) item_id to be awarded 
+					item_harvested = mod_groundspawn_imbue[item_choice]->item_id;
+
+					// we're picking a rare here, so obviously this is true ;)
+					rare_item = 0;
+
+					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "imbue Item ID to award: %u", rare_harvested);
+				}
+
+
+
+
+				else {
 					// all item entries were eliminated above, or none are assigned. Either way, shouldn't be here!
 					LogWrite(GROUNDSPAWN__ERROR, 0, "GSpawn", "Groundspawn Entry for '%s' (%i) has no items!", GetName(), GetID());
 				}
-				
+
 				// if an item was harvested, send updates to client, add item to inventory
-				if(item_harvested)
-				{
-					char tmp[200] = {0};
+				if (item_harvested) {
+					char tmp[200] = { 0 };
 
 					// set Normal item harvested
 					master_item = master_item_list.GetItem(item_harvested);
-					if(master_item)
-					{
+					if (master_item) {
 						// set details of Normal item
 						item = new Item(master_item);
 						// set how many of this item the player receives
 						item->details.count = reward_total;
-
 
 						// chat box update for normal item (todo: verify output text)
 						client->Message(CHANNEL_COLOR_HARVEST, "You %s %i \\aITEM %u %u:%s\\/a from the %s.", GetHarvestMessageName(true).c_str(), item->details.count, item->details.item_id, item->details.unique_id, item->name.c_str(), GetName());
@@ -384,9 +388,10 @@ void GroundSpawn::ProcessHarvest(Client* client)
 						//Check if the player has a harvesting quest for this
 						client->GetPlayer()->CheckQuestsHarvestUpdate(item, reward_total);
 
+
+
 						// if this is a 10+rare, handle sepErately
-						if(harvest_type == 6 && rare_item == 1)
-						{
+						if (harvest_type == 6 && rare_item == 1) {
 							LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Item ID %u is Normal. Qty %i", item_harvested, item->details.count);
 
 							// send Normal harvest message to client
@@ -396,8 +401,7 @@ void GroundSpawn::ProcessHarvest(Client* client)
 
 							// set Rare item harvested
 							master_rare = master_item_list.GetItem(rare_harvested);
-							if(master_rare)
-							{
+							if (master_rare) {
 								// set details of Rare item
 								item_rare = new Item(master_rare);
 								// count of Rare is always 1
@@ -419,8 +423,7 @@ void GroundSpawn::ProcessHarvest(Client* client)
 								client->GetPlayer()->CheckQuestsHarvestUpdate(item_rare, 1);
 							}
 						}
-						else if(rare_item == 1)	
-						{
+						else if (rare_item == 1) {
 							// if harvest signaled rare or imbue type
 							LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Item ID %u is RARE! Qty: %i", item_harvested, item->details.count);
 
@@ -430,17 +433,16 @@ void GroundSpawn::ProcessHarvest(Client* client)
 							client->SendPopupMessage(11, tmp, "ui_harvested_rare", 2.25, 0xFF, 0xFF, 0xFF);
 							client->GetPlayer()->UpdatePlayerStatistic(STAT_PLAYER_RARES_HARVESTED, item->details.count);
 						}
-						else
-						{
+						else {
 							// send Normal harvest message to client
 							LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "Item ID %u is Normal. Qty %i", item_harvested, item->details.count);
 							sprintf(tmp, "\\#64FFFFYou have %s:\12\\#C8FFFF%i %s", GetHarvestMessageName().c_str(), item->details.count, item->name.c_str());
 							client->SendPopupMessage(10, tmp, "ui_harvested_normal", 2.25, 0xFF, 0xFF, 0xFF);
 							client->GetPlayer()->UpdatePlayerStatistic(STAT_PLAYER_ITEMS_HARVESTED, item->details.count);
 						}
+
 					}
-					else
-					{
+					else {
 						// error!
 						LogWrite(GROUNDSPAWN__ERROR, 0, "GSpawn", "Error: Item ID Not Found - %u", item_harvested);
 						client->Message(CHANNEL_COLOR_RED, "Error: Unable to find item id %u", item_harvested);
@@ -448,15 +450,13 @@ void GroundSpawn::ProcessHarvest(Client* client)
 					// decrement # of pulls on this node before it despawns
 					number_harvests--;
 				}
-				else
-				{
+				else {
 					// if no item harvested
 					LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "No item_harvested");
 					client->Message(CHANNEL_COLOR_HARVEST, "You failed to %s anything from %s.", GetHarvestMessageName(true, true).c_str(), GetName());
 				}
 			}
-			else
-			{
+			else {
 				// if no harvest type
 				LogWrite(GROUNDSPAWN__DEBUG, 3, "GSpawn", "No harvest_type");
 				client->Message(CHANNEL_COLOR_HARVEST, "You failed to %s anything from %s.", GetHarvestMessageName(true, true).c_str(), GetName());

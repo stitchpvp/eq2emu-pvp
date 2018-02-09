@@ -99,9 +99,7 @@ NPC::~NPC(){
 		}
 		safe_delete(skills);
 	}
-	if(spells){
-		safe_delete(spells);
-	}
+	safe_delete(spells);
 	MutexMap<int32, SkillBonus*>::iterator sb_itr = skill_bonus_list.begin();
 	while (sb_itr.Next())
 		RemoveSkillBonus(sb_itr.first);
@@ -153,8 +151,7 @@ void NPC::SetSkills(map<string, Skill*>* in_skills){
 }
 
 void NPC::SetSpells(vector<Spell*>* in_spells){
-	if (spells)
-		safe_delete(spells);
+	safe_delete(spells);
 
 	spells = in_spells;
 }
@@ -204,15 +201,14 @@ void NPC::InCombat(bool val){
 		SetTempActionState(0); // disable action states in combat
 	}
 	in_combat = val;
-	if(val){
+	if (val) {
 		LogWrite(NPC__DEBUG, 3, "NPC", "'%s' engaged in combat with '%s'", this->GetName(), ( GetTarget() ) ? GetTarget()->GetName() : "Unknown" );
 		SetLockedNoLoot(3);
 		AddIconValue(64);
-		// In combat so lets set the NPC's speed to its max speed
+
 		if (GetMaxSpeed() > 0)
 			SetSpeed(GetMaxSpeed());
-	}
-	else{
+	} else {
 		SetLockedNoLoot(1);
 		RemoveIconValue(64);
 		if (GetHP() > 0){
@@ -222,7 +218,7 @@ void NPC::InCombat(bool val){
 			GetZone()->GetSpellProcess()->KillHOBySpawnID(GetID());
 		}
 	}
-	if(!MovementInterrupted() && val && GetSpeed() > 0 && movement_loop.size() > 0){
+	if(!MovementInterrupted() && val && movement_loop.size() > 0){
 		CalculateRunningLocation(true);
 	}
 	if(val){
@@ -702,29 +698,33 @@ Spell* NPC::GetNextSpell(float distance){
 }
 
 Spell* NPC::GetNextSpell(float distance, int8 type){
-	Spell* ret = 0;
-	if(spells){
-		if(distance < 0)
+	Spell* ret = nullptr;
+
+	if (spells) {
+		if (distance < 0)
 			distance = 0;
-		Spell* tmpSpell = 0;
-		vector<Spell*>::iterator itr;
-		for(itr = spells->begin(); itr != spells->end(); itr++){
-			tmpSpell = *itr;
-			if(!tmpSpell || (type == AI_STRATEGY_OFFENSIVE && tmpSpell->GetSpellData()->friendly_spell > 0))
+
+		for (const auto tmpSpell : *spells) {
+			if (!tmpSpell || (type == AI_STRATEGY_OFFENSIVE && tmpSpell->GetSpellData()->friendly_spell > 0))
 				continue;
+
 			if (tmpSpell->GetSpellData()->cast_type == SPELL_CAST_TYPE_TOGGLE)
 				continue;
-			if(type == AI_STRATEGY_DEFENSIVE && tmpSpell->GetSpellData()->friendly_spell == 0)
+
+			if (type == AI_STRATEGY_DEFENSIVE && tmpSpell->GetSpellData()->friendly_spell == 0)
 				continue;
-			if(distance <= tmpSpell->GetSpellData()->range && distance >= tmpSpell->GetSpellData()->min_range && GetPower() >= tmpSpell->GetPowerRequired(this)){
+
+			if ((tmpSpell->GetSpellData()->max_aoe_targets > 0 || (distance <= tmpSpell->GetSpellData()->range && distance >= tmpSpell->GetSpellData()->min_range)) && GetPower() >= tmpSpell->GetPowerRequired(this)) {
 				ret = tmpSpell;
 				if((rand()%100) >= 70) //30% chance to stop after finding the first match, this will give the appearance of the NPC randomly choosing a spell to cast
 					break;
 			}
 		}
+
 		if(!ret && type != AI_STRATEGY_BALANCED)
 			ret = GetNextSpell(distance, AI_STRATEGY_BALANCED); //wasnt able to find a valid match, so find any spell that the NPC has
 	}
+
 	return ret;
 }
 

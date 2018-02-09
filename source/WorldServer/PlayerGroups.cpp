@@ -23,6 +23,7 @@ along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 #include "World.h"
 #include "Spells.h"
 #include "LuaInterface.h"
+#include "Bots/Bot.h"
 
 extern ZoneList	zone_list;
 
@@ -90,6 +91,8 @@ bool PlayerGroup::RemoveMember(Entity* member) {
 	}
 
 	safe_delete(gmi);
+	if (member->IsBot())
+		((Bot*)member)->Camp();
 
 	return ret;
 }
@@ -97,8 +100,11 @@ bool PlayerGroup::RemoveMember(Entity* member) {
 void PlayerGroup::Disband() {
 	deque<GroupMemberInfo*>::iterator itr;
 	for (itr = m_members.begin(); itr != m_members.end(); itr++) {
-		if ((*itr)->member)
+		if ((*itr)->member) {
 			(*itr)->member->SetGroupMemberInfo(0);
+			if ((*itr)->member->IsBot())
+				((Bot*)(*itr)->member)->Camp();
+		}
 		if ((*itr)->client)
 			(*itr)->client->GetPlayer()->SetCharSheetChanged(true);
 
@@ -131,7 +137,7 @@ void PlayerGroup::GroupChatMessage(Spawn* from, const char* message) {
 	for(itr = m_members.begin(); itr != m_members.end(); itr++) {
 		GroupMemberInfo* info = *itr;
 		if(info->client && info->client->GetCurrentZone())
-			info->client->GetCurrentZone()->HandleChatMessage(info->client, from, 0, CHANNEL_GROUP_CHAT, message, 0);
+			info->client->GetCurrentZone()->HandleChatMessage(info->client, from, 0, CHANNEL_GROUP_SAY, message, 0);
 	}
 }
 
@@ -166,8 +172,9 @@ PlayerGroupManager::~PlayerGroupManager() {
 	MPendingInvites.releasewritelock(__FUNCTION__, __LINE__);
 
 	MGroups.writelock(__FUNCTION__, __LINE__);
-	for (int32 i = 0; i < m_groups.size(); i++)
-		safe_delete(m_groups.at(i));
+	map<int32, PlayerGroup*>::iterator itr;
+	for (itr = m_groups.begin(); itr != m_groups.end(); itr++)
+		safe_delete(itr->second);
 
 	m_groups.clear();
 	MGroups.releasewritelock(__FUNCTION__, __LINE__);
@@ -268,8 +275,10 @@ int8 PlayerGroupManager::Invite(Player* leader, Entity* member) {
 	MPendingInvites.writelock(__FUNCTION__, __LINE__);
 
 	// Disable npc's in group until we are ready for mercs
-	if (!member || member->IsNPC() || member->CanAttackTarget(leader))
+	if (!member || (member->IsNPC() && !member->IsBot()) || member->IsHostile(leader))
 		ret = 6; // failure, not a valid target
+	else if (member->IsNPC() && (!member->IsBot() /*|| !member->IsMec()*/))
+		ret = 6;
 	else if (leader == member)
 		ret = 5; // failure, can't invite yourself
 	else if (member->GetGroupMemberInfo())
@@ -397,59 +406,73 @@ void PlayerGroupManager::ClearPendingInvite(Entity* member) {
 }
 
 void PlayerGroupManager::RemoveGroupBuffs(int32 group_id, Client* client) {
-	SpellEffects* se = 0;
-	Spell* spell = 0;
-	LuaSpell* luaspell = 0;
-	EQ2Packet* packet = 0;
-	Entity* pet = 0;
-	Player* player = 0;
-	Entity* charmed_pet = 0;
-	PlayerGroup* group = 0;
+	PlayerGroup* group = nullptr;
+	map<Player*, vector<LuaSpell*>> to_remove;
 
 	MGroups.readlock(__FUNCTION__, __LINE__);
 	if (m_groups.count(group_id) > 0)
 		group = m_groups[group_id];
 
 	if (group && client) {
-		/* first remove all spell effects this group member has on them from other group members */
-		player = client->GetPlayer();
-		se = player->GetSpellEffects();
+		Player* player = client->GetPlayer();
+		SpellEffects *se = player->GetSpellEffects();
+
 		for (int i = 0; i < NUM_SPELL_EFFECTS; i++) {
 			if (se[i].spell_id != 0xFFFFFFFF) {
-				//If the client is the caster, don't remove the spell
-				if (se[i].caster == player)
-					continue;
+				LuaSpell* luaspell = se[i].spell;
+				Spell* spell = luaspell->spell;
 
-				luaspell = se[i].spell;
-				spell = luaspell->spell;
-				/* is this a friendly group spell? */
 				if (spell && spell->GetSpellData()->group_spell && spell->GetSpellData()->friendly_spell) {
-					//Remove all group buffs not cast by this player
-					player->RemoveSpellEffect(luaspell);
-					player->RemoveSpellBonus(luaspell);
-					player->RemoveSkillBonus(spell->GetSpellID());
+					if (luaspell->caster == player) {
+						deque<GroupMemberInfo*>* members = group->GetMembers();
+						deque<GroupMemberInfo*>::iterator itr;
+						for (itr = members->begin(); itr != members->end(); itr++) {
+							GroupMemberInfo* info = *itr;
 
-					//Also remove group buffs from pets
-					pet = 0;
-					charmed_pet = 0;
-					if (player->HasPet()){
-						pet = player->GetPet();
-						charmed_pet = player->GetCharmedPet();
-					}
-					if (pet){
-						pet->RemoveSpellEffect(luaspell);
-						pet->RemoveSpellBonus(luaspell);
-					}
-					if (charmed_pet){
-						charmed_pet->RemoveSpellEffect(luaspell);
-						charmed_pet->RemoveSpellBonus(luaspell);
+							if (info->client == client || info->client->GetCurrentZone() != client->GetCurrentZone())
+								continue;
+
+							to_remove[info->client->GetPlayer()].push_back(luaspell);
+						}
+					} else {
+						to_remove[player].push_back(luaspell);
 					}
 				}
 			}
 		}
-		packet = client->GetPlayer()->GetSkills()->GetSkillPacket(client->GetVersion());
-		if (packet)
-			client->QueuePacket(packet);
+
+		for (const auto& remove : to_remove) {
+			Player* target = remove.first;
+			vector<LuaSpell*> effects = remove.second;
+
+			for (const auto effect : effects) {
+				target->RemoveSpellEffect(effect);
+				target->RemoveSpellBonus(effect);
+				target->RemoveSkillBonus(effect->spell->GetSpellID());
+
+				Entity* pet = nullptr;
+				Entity* charmed_pet = nullptr;
+
+				if (target->HasPet()) {
+					pet = target->GetPet();
+					charmed_pet = target->GetCharmedPet();
+				}
+
+				if (pet) {
+					pet->RemoveSpellEffect(effect);
+					pet->RemoveSpellBonus(effect);
+				}
+
+				if (charmed_pet) {
+					charmed_pet->RemoveSpellEffect(effect);
+					charmed_pet->RemoveSpellBonus(effect);
+				}
+			}
+
+			EQ2Packet* packet = target->GetSkills()->GetSkillPacket(client->GetVersion());
+			if (packet)
+				target->GetZone()->GetClientBySpawn(target)->QueuePacket(packet);
+		}
 	}
 	MGroups.releasereadlock(__FUNCTION__, __LINE__);
 }
@@ -529,7 +552,7 @@ void PlayerGroupManager::UpdateGroupBuffs() {
 	MaintainedEffects* me = 0;
 	LuaSpell* luaspell = 0;
 	Spell* spell = 0;
-	Player* group_member = 0;
+	Entity* group_member = 0;
 	SkillBonus* sb;
 	EQ2Packet* packet;
 	int32 i = 0;
@@ -554,7 +577,7 @@ void PlayerGroupManager::UpdateGroupBuffs() {
 				caster = (*member_itr)->client->GetPlayer();
 			else caster = 0;
 
-			if (!caster)
+			if (!caster || (*member_itr)->client->IsZoning())
 				continue;
 
 			if (!caster->GetMaintainedSpellBySlot(0))
@@ -576,7 +599,7 @@ void PlayerGroupManager::UpdateGroupBuffs() {
 					luaspell->MSpellTargets.writelock(__FUNCTION__, __LINE__);
 
 					for (target_itr = group->GetMembers()->begin(); target_itr != group->GetMembers()->end(); target_itr++) {
-						group_member = (*target_itr)->client->GetPlayer();
+						group_member = (*target_itr)->member;
 
 						if (!group_member)
 							continue;
@@ -604,9 +627,11 @@ void PlayerGroupManager::UpdateGroupBuffs() {
 								group_member->RemoveSpellEffect(luaspell);
 								group_member->RemoveSpellBonus(luaspell);
 								group_member->RemoveSkillBonus(spell->GetSpellID());
-								packet = group_member->GetSkills()->GetSkillPacket(client->GetVersion());
+								if (client) {
+									packet = ((Player*)group_member)->GetSkills()->GetSkillPacket(client->GetVersion());
 								if (packet)
 									client->QueuePacket(packet);
+								}
 								//Also remove group buffs from pet
 								if (group_member->HasPet()) {
 									pet = group_member->GetPet();
@@ -667,8 +692,10 @@ void PlayerGroupManager::UpdateGroupBuffs() {
 								for (itr_skills = sb->skills.begin(); itr_skills != sb->skills.end(); itr_skills++)
 									group_member->AddSkillBonus(sb->spell_id, (*itr_skills).second->skill_id, (*itr_skills).second->value);
 							}
+						}
 
-							packet = group_member->GetSkills()->GetSkillPacket(client->GetVersion());
+						if (client) {
+							packet = ((Player*)group_member)->GetSkills()->GetSkillPacket(client->GetVersion());
 							if (packet)
 								client->QueuePacket(packet);
 						}
@@ -683,4 +710,24 @@ void PlayerGroupManager::UpdateGroupBuffs() {
 			caster->GetMaintainedMutex()->releasereadlock(__FUNCTION__, __LINE__);
 		}
 	}
+}
+
+bool PlayerGroupManager::IsInGroup(int32 group_id, Entity* member) {
+	bool ret = false;
+
+	MGroups.readlock(__FUNCTION__, __LINE__);
+
+	if (m_groups.count(group_id) > 0) {
+		deque<GroupMemberInfo*>* members = m_groups[group_id]->GetMembers();
+		for (int8 i = 0; i < members->size(); i++) {
+			if (member == members->at(i)->member) {
+				ret = true;
+				break;
+			}
+		}
+	}
+
+	MGroups.releasereadlock(__FUNCTION__, __LINE__);
+
+	return ret;
 }

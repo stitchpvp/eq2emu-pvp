@@ -28,8 +28,8 @@ using namespace std;
 #include "Commands/Commands.h"
 
 #ifdef WIN32
+#include <WinSock2.h>
 #include <windows.h>
-#include <winsock.h>
 #else
 #include <sys/socket.h>
 #ifdef FREEBSD //Timothy Whitman - January 7, 2003
@@ -78,6 +78,9 @@ extern int errno;
 #include <algorithm>
 #include "PVP.h"
 
+#include "Zone/SPGrid.h"
+#include "Bots/Bot.h"
+
 #ifdef WIN32
 #define snprintf	_snprintf
 #define vsnprintf	_vsnprintf
@@ -107,6 +110,7 @@ extern Chat chat;
 extern MasterRaceTypeList race_types_list;
 extern MasterSpellList master_spell_list;		// temp - remove later
 extern MasterSkillList master_skill_list;
+
 
 int32 MinInstanceID = 1000;
 
@@ -144,6 +148,8 @@ ZoneServer::ZoneServer(const char* name) {
 	dawn_minute = 0;
 	reloading_spellprocess = false;
 	MMasterZoneLock = new CriticalSection(MUTEX_ATTRIBUTE_RECURSIVE);
+	
+	Grid = nullptr;
 	weather_allowed = true;
 	spawnthread_active = false;
 	combatthread_active = false;
@@ -196,6 +202,9 @@ ZoneServer::~ZoneServer() {
 		database.DeleteInstance(instanceID);
 	}
 
+	if (Grid != nullptr)
+		delete Grid;
+
 	LogWrite(ZONE__INFO, 0, "Zone", "Completed zone shutdown of '%s'", zone_name);
 	--numzones;
 	UpdateWindowTitle(0);
@@ -209,6 +218,9 @@ void ZoneServer::Init()
 
 	spellProcess = new SpellProcess();
 	tradeskillMgr = new TradeskillMgr();
+
+	unknown_spawn = new Entity();
+	AddSpawn(unknown_spawn);
 
 	/* Dynamic Timers */
 	regenTimer.Start(rule_manager.GetGlobalRule(R_Zone, RegenTimer)->GetInt32());
@@ -255,6 +267,20 @@ void ZoneServer::Init()
 
 	world.UpdateServerStatistic(STAT_SERVER_NUM_ACTIVE_ZONES, 1);
 	UpdateWindowTitle(0);
+
+	if (Grid == nullptr) {
+		Grid = new SPGrid(string(GetZoneFile()), 0);
+		if (Grid->Init())
+			LogWrite(ZONE__DEBUG, 0, "SPGrid", "ZoneServer::Init() successfully initialized the grid");
+		else {
+			LogWrite(ZONE__DEBUG, 0, "SPGrid", "ZoneServer::Init() failed to initialize the grid... poor tron...");
+			delete Grid;
+			Grid = nullptr;
+		}
+	}
+	else
+		LogWrite(ZONE__ERROR, 0, "SPGrid", "ZoneServer::Init() Grid is not null in init, wtf!");
+
 	MMasterSpawnLock.SetName("ZoneServer::MMasterSpawnLock");
 	m_npc_faction_list.SetName("ZoneServer::npc_faction_list");
 	m_enemy_faction_list.SetName("ZoneServer::enemy_faction_list");
@@ -803,14 +829,14 @@ bool ZoneServer::CheckNPCAttacks(NPC* npc, Spawn* victim, Client* client){
 							Spawn* group_member = groupVec->at(i);
 							if (group_member && !group_member->EngagedInCombat() && group_member->Alive()) {
 								CallSpawnScript(group_member, SPAWN_SCRIPT_AGGRO, victim);
-								((NPC*)group_member)->AddHate((Entity*)victim, 50);
+								((NPC*)group_member)->AddHate((Entity*)victim, 50, true);
 							}
 						}
 						safe_delete(groupVec);
 					}
 					else
 					{
-						npc->AddHate((Entity*)victim, 50);
+						npc->AddHate((Entity*)victim, 50, true);
 					}
 				}
 				else {
@@ -1021,8 +1047,8 @@ void ZoneServer::CheckSpawnRange(Client* client, Spawn* spawn, bool initial_logi
 			if(spawn_range_map.count(client) == 0)
 				spawn_range_map.Put(client, new MutexMap<int32, float >());
 			spawn_range_map.Get(client)->Put(spawn->GetID(), spawn->GetDistance(client->GetPlayer()));
-			if (!initial_login && client && spawn->IsNPC() && spawn_range_map.Get(client)->Get(spawn->GetID()) <= ((NPC*)spawn)->GetAggroRadius() && !client->GetPlayer()->GetInvulnerable()) {
-				CheckNPCAttacks((NPC*)spawn, client->GetPlayer(), client);
+			if (!initial_login && client && spawn->IsNPC() && !static_cast<NPC*>(spawn)->m_runningBack && spawn_range_map.Get(client)->Get(spawn->GetID()) <= static_cast<NPC*>(spawn)->GetAggroRadius() && !client->GetPlayer()->GetInvulnerable()) {
+				CheckNPCAttacks(static_cast<NPC*>(spawn), client->GetPlayer(), client);
 			}
 		} 
 
@@ -1070,6 +1096,9 @@ void ZoneServer::CheckSendSpawnToClient(Client* client, bool initial_login) {
 			MutexMap<int32, float >::iterator spawn_iter = spawn_range_map.Get(client)->begin();
 			while(spawn_iter.Next()) {
 				spawn = GetSpawnByID(spawn_iter->first);
+
+				if (spawn == unknown_spawn) continue;
+
 				if(spawn && spawn->GetPrivateQuestSpawn()) {
 					if(!spawn->IsPrivateSpawn())
 						spawn->AddAllowAccessSpawn(spawn);
@@ -1513,7 +1542,7 @@ bool ZoneServer::SpawnProcess(){
 					spawn->last_movement_update = Timer::GetCurrentTime2();
 				}
 
-				// Makes NPC's KOS to other NPC's or players
+				// Makes NPC's KOS to other NPC's
 				if (aggroCheck)
 					ProcessAggroChecks(spawn);
 
@@ -1738,7 +1767,7 @@ void ZoneServer::SendSpawnChanges(Spawn* spawn){
 			for (itr = clients.begin(); itr != clients.end(); itr++) {
 				client = *itr;
 
-				if (spawn->IsPlayer() && client->GetPlayer()->CanAttackTarget((Player*)spawn) && ((Player*)spawn)->IsStealthed() && !client->GetPlayer()->stats[ITEM_STAT_SEESTEALTH]) {
+				if (spawn->IsPlayer() && client->GetPlayer()->IsHostile(static_cast<Player*>(spawn)) && static_cast<Player*>(spawn)->IsStealthed() && !client->GetPlayer()->stats[ITEM_STAT_SEESTEALTH]) {
 					int16 packet_version = client->GetVersion();
 					PacketStruct *packet = configReader.getStruct("WS_DestroyGhostCmd", packet_version);
 
@@ -1857,7 +1886,7 @@ void ZoneServer::SendSpawnChanges(){
 	while(spawn_iter.Next()){		
 		spawn = GetSpawnByID(spawn_iter->value);
 		if(spawn && spawn->changed){
-			if(!spawn->IsPlayer() || (spawn->IsPlayer() && (spawn->info_changed || spawn->vis_changed))){
+			if(!spawn->IsPlayer() || (spawn->IsPlayer() && (spawn->info_changed || spawn->vis_changed))) {
 				SendSpawnChanges(spawn);
 			}
 		}
@@ -1944,7 +1973,7 @@ int32 ZoneServer::CalculateSpawnGroup(SpawnLocation* spawnlocation, bool respawn
 			for(itr2 = tmp_chances.begin(); itr2 != tmp_chances.end(); itr2++){
 				if(itr2->second == 0){
 					total_chance += 100/tmp_chances.size();
-					tmp_chances[itr2->first] = 100/tmp_chances.size();
+					tmp_chances[itr2->first] = (float)(100 / tmp_chances.size());
 				}
 			}
 		}
@@ -2138,19 +2167,19 @@ Spawn* ZoneServer::ProcessInstanceSpawnLocation(SpawnLocation* spawnlocation, ma
 		if(spawnlocation->entities[i]->spawn_percentage >= rand_number)
 		{
 			if(spawnlocation->entities[i]->spawn_type == SPAWN_ENTRY_TYPE_NPC && 
-				(spawnTime = database.CheckSpawnRemoveInfo(instNPCs,spawnlocation->entities[i]->spawn_location_id) > 0))
+				(spawnTime = database.CheckSpawnRemoveInfo(instNPCs,spawnlocation->entities[i]->spawn_location_id)) > 0)
 				spawn = AddNPCSpawn(spawnlocation, spawnlocation->entities[i]);
 			else if(spawnlocation->entities[i]->spawn_type == SPAWN_ENTRY_TYPE_GROUNDSPAWN && 
-				(spawnTime = database.CheckSpawnRemoveInfo(instGroundSpawns,spawnlocation->entities[i]->spawn_location_id) > 0))
+				(spawnTime = database.CheckSpawnRemoveInfo(instGroundSpawns,spawnlocation->entities[i]->spawn_location_id)) > 0)
 				spawn = AddGroundSpawn(spawnlocation, spawnlocation->entities[i]);
 			else if(spawnlocation->entities[i]->spawn_type == SPAWN_ENTRY_TYPE_OBJECT && 
-				(spawnTime = database.CheckSpawnRemoveInfo(instObjSpawns,spawnlocation->entities[i]->spawn_location_id) > 0))
+				(spawnTime = database.CheckSpawnRemoveInfo(instObjSpawns,spawnlocation->entities[i]->spawn_location_id)) > 0)
 				spawn = AddObjectSpawn(spawnlocation, spawnlocation->entities[i]);
 			else if(spawnlocation->entities[i]->spawn_type == SPAWN_ENTRY_TYPE_WIDGET && 
-				(spawnTime = database.CheckSpawnRemoveInfo(instWidgetSpawns,spawnlocation->entities[i]->spawn_location_id) > 0))
+				(spawnTime = database.CheckSpawnRemoveInfo(instWidgetSpawns,spawnlocation->entities[i]->spawn_location_id)) > 0)
 				spawn = AddWidgetSpawn(spawnlocation, spawnlocation->entities[i]);
 			else if(spawnlocation->entities[i]->spawn_type == SPAWN_ENTRY_TYPE_SIGN && 
-				(spawnTime = database.CheckSpawnRemoveInfo(instSignSpawns,spawnlocation->entities[i]->spawn_location_id) > 0))
+				(spawnTime = database.CheckSpawnRemoveInfo(instSignSpawns,spawnlocation->entities[i]->spawn_location_id)) > 0)
 				spawn = AddSignSpawn(spawnlocation, spawnlocation->entities[i]);
 
 			const char* script = 0;
@@ -2289,39 +2318,74 @@ void ZoneServer::AddLoot(NPC* npc){
 		vector<LootDrop*>::iterator loot_drop_itr;
 		LootTable* table = 0;
 		vector<int32>::iterator loot_list_itr;
-		float chance = 0;
+		float chancecoin = 0;
+		float chancetable = 0;
+		float chancedrop = 0;
+		float chancetally = 0;
+		float droptally = 0;
+		// the following loop,loops through each table
 		for(loot_list_itr = loot_tables.begin(); loot_list_itr != loot_tables.end(); loot_list_itr++){
 			table = GetLootTable(*loot_list_itr);
 			if(table && table->maxcoin > 0){
-				chance = rand()%100;
-				if(table->coin_probability >= chance){
+				chancecoin = rand()%100;
+				if(table->coin_probability >= chancecoin){
 					if(table->maxcoin > table->mincoin)
 						npc->AddLootCoins(table->mincoin + rand()%(table->maxcoin - table->mincoin));
 				}
 			}
-			chance = rand()%100;
-			if(table && (table->lootdrop_probability < 100 || table->lootdrop_probability >= chance)){
+			int numberchances = 1;
+
+			//if (table->lootdrop_probability == 100){			}
+		//else
+			//chancetally += table->lootdrop_probability;
+			int maxchance = 0;
+			if (table) {
+				maxchance = table->maxlootitems;
+				for (numberchances; numberchances <= maxchance; numberchances++) {
+				chancetable = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 100));
+				//LogWrite(PLAYER__DEBUG, 0, "Player", "Table Chance: '%f'", chancetable);
+				float droppercenttotal = 0;
+			//--------------------------------------------------------------------------------------------------------------------------------------------------------------
+					if (table->lootdrop_probability == 100 || table->lootdrop_probability >= chancetable) {
+
+					//LogWrite(PLAYER__DEBUG, 0, "Player", "Probability:%f  Table Chance: '%f'", table->lootdrop_probability, chancetable);
 				loot_drops = GetLootDrops(*loot_list_itr);
-				if(loot_drops){
+						if (loot_drops) {
 					LootDrop* drop = 0;
 					int16 count = 0;
-					for(loot_drop_itr = loot_drops->begin(); loot_drop_itr != loot_drops->end(); loot_drop_itr++){
+					int16 IC = 0;
+							for (loot_drop_itr = loot_drops->begin(); loot_drop_itr != loot_drops->end(); loot_drop_itr++) {
 						drop = *loot_drop_itr;
-						chance = rand()%100;
-						if(drop->probability >= chance){
+						droppercenttotal += drop->probability;
+					}
+					int droplistsize = loot_drops->size();
+					float chancedroptally = 0;
+					chancedrop = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 100));
+							for (loot_drop_itr = loot_drops->begin(); loot_drop_itr != loot_drops->end(); loot_drop_itr++) {
+						drop = *loot_drop_itr;
+						if (droppercenttotal >= 100)
+							droppercenttotal = 100;
+						chancedroptally += 100 / droppercenttotal * drop->probability;
+						//chancedrop = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 100));
+						//LogWrite(PLAYER__DEBUG, 0, "Player", "Loot drop: '%i'     Chance: %f    Prob tally:  %f  min: %f", drop, chancedrop, chancedroptally, chancedroptally - drop->probability);
+								if ((chancedroptally == 100) || ((chancedroptally >= chancedrop) && (chancedroptally - (100 / droppercenttotal * drop->probability)) <= chancedrop)) {
+
+							//LogWrite(PLAYER__DEBUG, 0, "Player", "Loot drop: '%i'     Chance: %f    Prob:  %f  We have a loot drop winner", drop, chancedrop, chancedroptally);
 							count++;
 							npc->AddLootItem(drop->item_id, drop->item_charges);
-
-							LogWrite(MISC__TODO, 1, "TODO", "Auto-Equip new looted items\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
+							//LogWrite(PLAYER__DEBUG, 0, "Player", "loot Count: '%i'",count);
+							//LogWrite(MISC__TODO, 1, "TODO", "Auto-Equip new looted items\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
 							//if(drop->equip_item) 
 
 						}
-						if(table->maxlootitems > 0 && count >= table->maxlootitems)
+						if (table->maxlootitems > 0 && count >= table->maxlootitems)
 							break;
 					}
 				}
 			}
+			}
 		}
+	}
 	}
 }
 
@@ -2663,6 +2727,8 @@ Sign* ZoneServer::AddSignSpawn(SpawnLocation* spawnlocation, SpawnEntry* spawnen
 		sign->SetExpireTime(spawnentry->expire_time);
 		if (spawnentry->expire_time > 0)
 			AddSpawnExpireTimer(sign, spawnentry->expire_time, spawnentry->expire_offset);
+		
+		
 		AddSpawn(sign);
 	}
 	LogWrite(SPAWN__TRACE, 0, "Spawn", "Exit %s", __FUNCTION__);
@@ -2753,6 +2819,9 @@ void ZoneServer::AddSpawn(Spawn* spawn) {
 		((Player*)spawn)->SetCharSheetChanged(true);
 	}
 
+	if (Grid != nullptr) {
+		Grid->AddSpawn(spawn);
+	}
 }
 
 void ZoneServer::AddClient(Client* client){
@@ -2770,7 +2839,7 @@ void ZoneServer::RemoveClient(Client* client)
 	if(client)
 	{
 		client->Disconnect();
-
+		
 		LogWrite(ZONE__DEBUG, 0, "Zone", "Sending login equipment appearance updates...");
 		loginserver.SendImmediateEquipmentUpdatesForChar(client->GetPlayer()->GetCharacterID());
 
@@ -2808,6 +2877,7 @@ void ZoneServer::RemoveClient(Client* client)
 				LogWrite(ZONE__DEBUG, 0, "Zone", "Removing client '%s' (%u) due to Camp/Quit...", client->GetPlayer()->GetName(), client->GetPlayer()->GetCharacterID());
 			}
 
+			database.SavePlayerActiveSpells(client);
 			GetSpellProcess()->RemoveSpellTimersFromSpawn(client->GetPlayer(), true);
 				
 			client->GetPlayer()->DismissPet((NPC*)client->GetPlayer()->GetPet());
@@ -2816,13 +2886,16 @@ void ZoneServer::RemoveClient(Client* client)
 			client->GetPlayer()->DismissPet((NPC*)client->GetPlayer()->GetCosmeticPet());
 
 			RemoveSpawn(client->GetPlayer(), false);
-			connected_clients.Remove(client, true, DisconnectClientTimer);
 		}
-		else
-		{
-			LogWrite(ZONE__DEBUG, 0, "Zone", "Removing client '%s' (%u) due to some client zoning...", client->GetPlayer()->GetName(), client->GetPlayer()->GetCharacterID());
-			connected_clients.Remove(client, true, DisconnectClientTimer); // changed from a hardcoded 30000 (30 sec) to the DisconnectClientTimer rule
+
+		map<int32, int32>::iterator itr;
+		for (itr = client->GetPlayer()->SpawnedBots.begin(); itr != client->GetPlayer()->SpawnedBots.end(); itr++) {
+			Spawn* spawn = GetSpawnByID(itr->second);
+			if (spawn && spawn->IsBot())
+				((Bot*)spawn)->Camp();
 		}
+
+		connected_clients.Remove(client, true, DisconnectClientTimer);
 
 		client_spawn_map.Put(client->GetPlayer(), 0);
 
@@ -3017,7 +3090,7 @@ void ZoneServer::HandleAnnouncement(const char* message) {
 		words = 5;
 
 	MClientList.readlock(__FUNCTION__, __LINE__);
-	for (client_itr = clients.begin(); client_itr != clients.begin(); client_itr++) {
+	for (client_itr = clients.begin(); client_itr != clients.end(); client_itr++) {
 		client = *client_itr;
 		if(client && client->IsConnected()) {
 			client->SimpleMessage(CHANNEL_BROADCAST, message);
@@ -3430,11 +3503,15 @@ bool ZoneServer::SendRemoveSpawn(Client* client, Spawn* spawn, PacketStruct* pac
 	{
 		LogWrite(ZONE__DEBUG, 7, "Zone", "Processing SendRemoveSpawn for spawn index %u...", index);
 		packet->setDataByName("spawn_index", index);
-		client->GetPlayer()->GetPlayerSpawnMap()->erase(index);
-		client->GetPlayer()->GetPlayerSpawnIndexMap()->erase(spawn);
+
 		client->GetPlayer()->player_spawn_id_map.erase(cur_id);
 		client->GetPlayer()->player_spawn_reverse_id_map.erase(spawn);
-		client->GetPlayer()->RemoveSpawn(spawn); // sets it as removed
+
+		if (client->GetPlayer() != spawn) {
+			client->GetPlayer()->GetPlayerSpawnMap()->erase(index);
+			client->GetPlayer()->GetPlayerSpawnIndexMap()->erase(spawn);
+			client->GetPlayer()->RemoveSpawn(spawn); // sets it as removed
+		}
 
 		if(delete_spawn)
 			packet->setDataByName("delete", 1);	
@@ -3612,6 +3689,10 @@ void ZoneServer::RemoveSpawn(Spawn* spawn, bool delete_spawn, bool respawn, bool
 {
 	LogWrite(ZONE__DEBUG, 3, "Zone", "Processing RemoveSpawn function...");
 
+	if (Grid != nullptr) {
+		Grid->RemoveSpawnFromCell(spawn);
+	}
+
 	RemoveSpawnSupportFunctions(spawn);
 	RemoveDeadEnemyList(spawn);
 	if (lock)
@@ -3697,7 +3778,7 @@ void ZoneServer::RemoveSpawn(Spawn* spawn, bool delete_spawn, bool respawn, bool
 	LogWrite(ZONE__DEBUG, 3, "Zone", "Done processing RemoveSpawn function...");
 }
 
-void ZoneServer::RemoveSpawnFromClient(Spawn* spawn) {
+void ZoneServer::RemoveSpawnFromClient(Spawn* spawn, bool skip_if_client) {
 	Client* client = 0;
 	PacketStruct* packet = 0;
 	int16 packet_version = 0;
@@ -3712,7 +3793,7 @@ void ZoneServer::RemoveSpawnFromClient(Spawn* spawn) {
 			if (!client->IsConnected())
 				continue;
 
-			if (client->GetPlayer() == spawn)
+			if (skip_if_client && client->GetPlayer() == spawn)
 				continue;
 
 			if (!packet || packet_version != client->GetVersion())
@@ -3743,9 +3824,10 @@ Spawn* ZoneServer::GetClosestSpawn(Spawn* spawn, int32 spawn_id){
 	MSpawnList.readlock(__FUNCTION__, __LINE__);
 	for (itr = spawn_list.begin(); itr != spawn_list.end(); itr++) {
 		test_spawn = itr->second;
-		if(test_spawn && test_spawn->GetDatabaseID() == spawn_id){
+		if (test_spawn == spawn) continue;
+		if (test_spawn && test_spawn->GetDatabaseID() == spawn_id) {
 			test_distance = test_spawn->GetDistance(spawn);
-			if(test_distance < closest_distance){
+			if (test_distance < closest_distance) {
 				closest_distance = test_distance;
 				closest_spawn = test_spawn;
 			}
@@ -3910,13 +3992,12 @@ void ZoneServer::SendCalculatedXP(Player* player, Spawn* victim){
 
 void ZoneServer::ProcessFaction(Spawn* spawn, Client* client)
 {
-	Player* player = client->GetPlayer();
-
 	if(client && !spawn->IsPlayer() && spawn->GetFactionID() > 10)
 	{
 		bool update_result = false;
 		Faction* faction = 0;
 		vector<int32>* factions = 0;
+		Player* player = client->GetPlayer();
 
 		if(player->GetFactions()->ShouldDecrease(spawn->GetFactionID()))
 		{
@@ -4018,64 +4099,18 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 				return;
 		}
 
-		if (killer && killer->IsPlayer()) {
-			client = GetClientBySpawn(killer);
+		if (killer && killer->IsPlayer())
+			if (dead->IsPlayer() && PVP::IsEnabled())
+				PVP::HandleFameChange(static_cast<Player*>(killer), static_cast<Player*>(dead));
 
-			((Player*)killer)->InCombat(false);
-
-			PacketStruct* packet = configReader.getStruct("WS_EnterCombat", client->GetVersion());
-			if (packet) {
-				client->QueuePacket(packet->serialize());
-			}
-			safe_delete(packet);
-
-			if (dead->IsPlayer() && PVP::IsEnabled()) {
-				Player* dead_player = static_cast<Player*>(dead);
-				Player* killer_player = static_cast<Player*>(killer);
-				int dead_rank = PVP::GetRankIndex(dead_player);
-				int killer_rank = PVP::GetRankIndex(killer_player);
-				int ranking_difference = dead_rank - killer_rank;
-				
-				if (ranking_difference >= 1 && ranking_difference <= 2) {
-					dead_player->SetFame(dead_player->GetFame() - 10);
-					killer_player->SetFame(killer_player->GetFame() + 10);
-					dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your death has decreased your fame.");
-					killer_player->GetZone()->GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your victory has increased your fame.");
-				} else if (ranking_difference <= 0 && ranking_difference >= -2) {
-					dead_player->SetFame(dead_player->GetFame() - 5);
-					killer_player->SetFame(killer_player->GetFame() + 5);
-					dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your death has decreased your fame.");
-					killer_player->GetZone()->GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "Your victory has increased your fame.");
-				}
-
-				if (dead_rank != PVP::GetRankIndex(dead_player)) {
-					int rank = PVP::GetRankIndex(dead_player);
-					if (rank == 0) {
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, "You are no longer ranked.");
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SendPopupMessage(10, "Your are no longer ranked.", "", 2, 0xFF, 0xFF, 0xFF);
-					} else if (rank < dead_rank) {
-						char message[37];
-						sprintf(message, "Your rank has dropped to %s.", PVP::GetRank(dead_player).c_str());
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, message);
-						dead_player->GetZone()->GetClientBySpawn(dead_player)->SendPopupMessage(10, message, "", 2, 0xFF, 0xFF, 0xFF);
-					}
-					dead_player->GetZone()->GetClientBySpawn(dead_player)->SendTitleUpdate();
-				}
-
-				if (PVP::GetRankIndex(killer_player) > killer_rank) {
-					char message[42];
-					sprintf(message, "You have obtained the rank of %s.", PVP::GetRank(killer_player).c_str());
-					killer_player->GetZone()->GetClientBySpawn(killer_player)->SimpleMessage(CHANNEL_COLOR_YELLOW, message);
-					client->SendPopupMessage(10, message, "", 2, 0xFF, 0xFF, 0xFF);
-					client->SendTitleUpdate();
-				}
-
-				dead_player->UpdatePlayerStatistic(STAT_PLAYER_TOTAL_PVP_DEATHS, 1);
-				killer_player->UpdatePlayerStatistic(STAT_PLAYER_TOTAL_PVP_KILLS, 1);
-			}
+		if (dead->IsPlayer()) {
+			((Player*)dead)->InCombat(false);
+			((Player*)dead)->SetRangeAttack(false);
+			((Player*)dead)->SetMeleeAttack(false);
+		} else {
+			((Entity*)dead)->InCombat(false);
 		}
 
-		((Entity*)dead)->InCombat(false);
 		dead->SetInitialState(16512, false); // This will make aerial npc's fall after death
 		dead->SetHP(0);
 		dead->SetSpawnType(3);
@@ -4083,8 +4118,6 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 
 		// Remove hate towards dead from all npc's in the zone
 		ClearHate((Entity*)dead);
-
-		RemoveSpellTimersFromSpawn(dead, true, !dead->IsPlayer());
 
 		if(dead->IsPlayer()) 
 		{
@@ -4097,6 +4130,8 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 
 				client->DisplayDeadWindow();
 			}
+
+			static_cast<Player*>(dead)->ClearEncounterList();
 		}
 		else if (dead->IsNPC()) {
 			encounter = ((NPC*)dead)->Brain()->GetEncounter();
@@ -4104,11 +4139,21 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 
 	}
 
+	if (dead->IsPet())
+		((NPC*)dead)->GetOwner()->DismissPet((NPC*)dead, true);
+	else if (dead->IsEntity()) {
+		// remove all pets for this entity
+		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetPet());
+		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetCharmedPet());
+		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetDeityPet());
+		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetCosmeticPet());
+	}
+
 	dead->SetActionState(0);
 	dead->SetTempActionState(0);
 
 	// If dead is an npc get the encounter and loop through it giving out the rewards, no rewards for pets
-	if (dead->IsNPC() && !dead->IsPet()) {
+	if (dead->IsNPC() && !dead->IsPet() && !dead->IsBot()) {
 		Spawn* spawn = 0;
 		int8 size = encounter->size();
 		// Needs npc to have access to the encounter list for who is allowed to loot
@@ -4295,14 +4340,14 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 	}
 	
 	// If the dead spawns was not a player add it to the dead spawn list
-	if (!dead->IsPlayer())
+	if (!dead->IsPlayer() && !dead->IsBot())
 		AddDeadSpawn(dead, pop_timer);
 
 	// if dead was a player clear hostile spells from its spell queue
-	if (dead->IsPlayer())
-		spellProcess->RemoveSpellFromQueue((Player*)dead, true);
-
-
+	if (dead->IsPlayer()) {
+		spellProcess->RemoveSpellFromQueue(static_cast<Player*>(dead), true);
+		database.DeleteCharacterActiveSpells(GetClientBySpawn(dead), true);
+	}
 
 	// ResetPetInfo() is called in DismissPet(), might not need to be here
 
@@ -4320,7 +4365,7 @@ void ZoneServer::SendDamagePacket(Spawn* attacker, Spawn* victim, int8 type1, in
 	//	attacker_id = attacker->GetID();
 	PacketStruct* packet = 0;
 	Client* client = 0;
-	if(attacker && victim->IsPlayer() && victim->GetTarget() == 0){
+	if(attacker && victim && victim->IsPlayer() && victim->GetTarget() == 0){
 		client = GetClientBySpawn(victim);
 		if(client)
 			client->TargetSpawn(attacker);
@@ -4503,7 +4548,7 @@ void ZoneServer::SendInterruptPacket(Spawn* interrupted, LuaSpell* spell){
 	safe_delete(packet);
 }
 
-void ZoneServer::SendCastSpellPacket(LuaSpell* spell, Entity* caster){
+void ZoneServer::SendCastSpellPacket(LuaSpell* spell, Entity* caster, int16 cast_time) {
 	EQ2Packet* outapp = 0;
 	PacketStruct* packet = 0;
 	Client* client = 0;
@@ -4524,7 +4569,7 @@ void ZoneServer::SendCastSpellPacket(LuaSpell* spell, Entity* caster){
 			for (int32 i = 0; i < spell->targets.size(); i++)
 				packet->setArrayDataByName("target", client->GetPlayer()->GetIDWithPlayerSpawn(spell->caster->GetZone()->GetSpawnByID(spell->targets[i])), i);
 			packet->setDataByName("spell_visual", spell->spell->GetSpellData()->spell_visual); //result
-			packet->setDataByName("cast_time", spell->spell->GetSpellData()->cast_time*.01); //delay
+			packet->setDataByName("cast_time", cast_time*.01); //delay
 			packet->setDataByName("spell_id", spell->spell->GetSpellID());
 			packet->setDataByName("spell_level", 1);
 			packet->setDataByName("spell_tier", spell->spell->GetSpellData()->tier);
@@ -4656,6 +4701,24 @@ vector<Entity*> ZoneServer::GetPlayers(){
 	return ret;
 }
 
+Player*	ZoneServer::GetPlayerByID(int32 id) {
+	Player* ret = nullptr;
+	Client* client = nullptr;
+
+	MutexList<Client*>::iterator client_itr = connected_clients.begin();
+
+	while (client_itr.Next()) {
+		client = client_itr->value;
+
+		if (client && client->GetPlayer() && client->GetPlayer()->GetCharacterID() == id) {
+			ret = client->GetPlayer();
+			break;
+		}
+	}
+
+	return ret;
+}
+
 int16 ZoneServer::SetSpawnTargetable(Spawn* spawn, float distance){
 	Spawn* test_spawn = 0;
 	int16 ret_val = 0;
@@ -4705,43 +4768,73 @@ EQ2Packet* ZoneServer::GetZoneInfoPacket(Client* client){
 	packet->setSmallStringByName("zone2", GetZoneName());
 	packet->setSmallStringByName("zone_desc", GetZoneDescription());
 	packet->setSmallStringByName("char_name", client->GetPlayer()->GetName());
-	//packet->setDataByName("unknown1", 1, 1);
-	int32 expansions = EXPANSION_UNKNOWN + EXPANSION_DOF + EXPANSION_KOS + EXPANSION_EOF + EXPANSION_ROK + EXPANSION_TSO + EXPANSION_DOV;
-	packet->setDataByName("expansions_enabled", expansions);
-	
+
+	packet->setDataByName("expansions_enabled", 0);
 	packet->setDataByName("x", client->GetPlayer()->GetX());
 	packet->setDataByName("y", client->GetPlayer()->GetY());
 	packet->setDataByName("z", client->GetPlayer()->GetZ());
 	packet->setDataByName("unknown1", 1, 1);
-	// unknown3 can prevent screen shots from being taken if
-	packet->setDataByName("unknown3", 2094661567, 1);			// Screenshots allowed with this value
-	//packet->setDataByName("unknown3", 3815767999, 1);			// Screenshots disabled with this value
-	packet->setDataByName("unknown3", 1, 2);
 
-	if (client->GetVersion() <= 63181){
-		packet->setDataByName("unknown3", 872447025, 0);//63181 
-		packet->setDataByName("unknown3", 3085434875, 1);// 63181 
-		packet->setDataByName("unknown3", 2147483633, 2);// 63181 
+	if (client->GetVersion() <= 63181) {
+		packet->setDataByName("unknown3", 872447025, 0);
+		packet->setDataByName("unknown3", 3085434875, 1);
+		packet->setDataByName("unknown3", 2147483633, 2);
+	} else if (client->GetVersion() >= 63225) {
+		packet->setDataByName("unknown2a", 9);
+		packet->setDataByName("unknown2b", 2304);
+		//packet->setDataByName("unknown3a", 512);
+		//packet->setDataByName("unknown3b", 4160708352);
+		//packet->setDataByName("unknown3c", 4294938605);
+	} else {
+		packet->setDataByName("unknown2a", 8);
+		packet->setDataByName("unknown2b", 8);
+		packet->setDataByName("unknown3a", 750796556);
+		packet->setDataByName("unknown3b", 3991404383);
+		packet->setDataByName("unknown3c", 4278189967);
 	}
-	else{
-		packet->setDataByName("unknown3a", 73821356);//63182 
-		packet->setDataByName("unknown3b", 3991404383);// 63182
-		packet->setDataByName("unknown3c", 4278189967);// 63182
-		packet->setDataByName("unknown2a", 8);// 63182
-		packet->setDataByName("unknown2b", 8);// 63182
-	}
-
-	//packet->setDataByName("unknown5", 100798094);
-	packet->setDataByName("unknown5", 50859661);
-	packet->setDataByName("unknown6", 19);
-	packet->setDataByName("unknown6", 58, 1);
-	packet->setDataByName("unknown6", 6, 2);
+	
+	packet->setDataByName("year", world.GetWorldTimeStruct()->year);
+	packet->setDataByName("month", world.GetWorldTimeStruct()->month);
+	packet->setDataByName("day", world.GetWorldTimeStruct()->day);
+	packet->setDataByName("hour", world.GetWorldTimeStruct()->hour);
+	packet->setDataByName("minute", world.GetWorldTimeStruct()->minute);
+	packet->setDataByName("unknown", 0);
 	packet->setDataByName("unknown7", 1);
 	packet->setDataByName("unknown7", 1, 1);
+	
 	packet->setDataByName("unknown9", 13);
-	//packet->setDataByName("unknown10", 25188959);
-	packet->setDataByName("unknown10", 25190239);
-	packet->setDataByName("unknown12", 0xFFFFFFFF);
+
+	int zone_flags = ZONE_FLAGS_BASE;
+	if (PVP::IsEnabled(this))
+		zone_flags += ZONE_FLAGS_PVP;
+
+	packet->setDataByName("zone_flags", zone_flags);
+
+	packet->setDataByName("unknown10b", 1);
+	//packet->setDataByName("permission_level",3);// added on 63182  for now till we figur it out 0=none,1=visitor,2=friend,3=trustee,4=owner
+	packet->setDataByName("num_adv", 9);
+
+	packet->setArrayDataByName("adv_name", "adv02_dun_drowned_caverns", 0);
+	packet->setArrayDataByName("adv_id", 6, 0);
+	packet->setArrayDataByName("adv_name", "adv02_dun_sundered_splitpaw_hub", 1);
+	packet->setArrayDataByName("adv_id", 5, 1);
+	packet->setArrayDataByName("adv_name", "exp03_rgn_butcherblock", 2);
+	packet->setArrayDataByName("adv_id", 8, 2);
+	packet->setArrayDataByName("adv_name", "exp03_rgn_greater_faydark", 3);
+	packet->setArrayDataByName("adv_id", 7, 3);
+	packet->setArrayDataByName("adv_name", "mod01_dun_crypt_of_thaen", 4);
+	packet->setArrayDataByName("adv_id", 3, 4);
+	packet->setArrayDataByName("adv_name", "mod01_dun_tombs_of_night", 5);
+	packet->setArrayDataByName("adv_id", 4, 5);
+	packet->setArrayDataByName("adv_name", "nektulos_mini01", 6);
+	packet->setArrayDataByName("adv_id", 0, 6);
+	packet->setArrayDataByName("adv_name", "nektulos_mini02", 7);
+	packet->setArrayDataByName("adv_id", 1, 7);
+	packet->setArrayDataByName("adv_name", "nektulos_mini03", 8);
+	packet->setArrayDataByName("adv_id", 2, 8);
+
+
+
 
 	LogWrite(MISC__TODO, 0, "TODO", "Put cl_ client commands back in variables (not Rules) so they can be dynamically maintained");
 	vector<Variable*>* variables = world.GetClientVariables();
@@ -4945,6 +5038,29 @@ EQ2Packet* ZoneServer::GetZoneInfoPacket(Client* client){
 		packet->setArrayDataByName("tab_index", i, i);
 		packet->setArrayDataByName("tab_name", ":410385c7df8bd37d:Dragon", i);
 		}
+		packet->setDataByName("unknown_mj", 1);//int8
+		packet->setDataByName("unknown_mj1", 335544320);//int32
+		packet->setDataByName("unknown_mj2", 4);//int32
+		packet->setDataByName("unknown_mj3", 3962504088);//int32
+		packet->setDataByName("unknown_mj4", 3985947216);//int32
+		packet->setDataByName("unknown_mj5", 1);//int32
+		packet->setDataByName("unknown_mj6", 386);//int32
+		packet->setDataByName("unknown_mj7", 4294967295);//int32
+		packet->setDataByName("unknown_mj8", 2716312211);//int32
+		packet->setDataByName("unknown_mj9", 1774338333);//int32
+		packet->setDataByName("unknown_mj10", 1);//int32
+		packet->setDataByName("unknown_mj11", 391);//int32
+		packet->setDataByName("unknown_mj12", 4294967295);//int32
+		packet->setDataByName("unknown_mj13", 3168965163);//int32
+		packet->setDataByName("unknown_mj14", 4117025286);//int32
+		packet->setDataByName("unknown_mj15", 1);//int32
+		packet->setDataByName("unknown_mj16", 394);//int32
+		packet->setDataByName("unknown_mj17", 4294967295);//int32
+		packet->setDataByName("unknown_mj18", 1790669110);//int32
+		packet->setDataByName("unknown_mj19", 107158108);//int32
+		packet->setDataByName("unknown_mj20", 1);//int32
+		packet->setDataByName("unknown_mj21", 393);//int32
+		packet->setDataByName("unknown_mj22", 4294967295);//int32
 
 	EQ2Packet* outapp = packet->serialize();
 	//packet->PrintPacket();
@@ -5058,20 +5174,15 @@ void ZoneServer::CheckLocationProximity() {
 						float z = prox->z;
 						float max_variation = prox->max_variation;
 						float total_diff = 0;
-						float diff = x - char_x; //Check X
-						if(diff < 0)
-							diff *= -1;
+						float diff = abs(x - char_x); //Check X
+
 						if(diff <=  max_variation) {
 							total_diff += diff;
-							diff = z - char_z; //Check Z (we check Z first because it is far more likely to be a much greater variation than y)
-							if(diff < 0)
-								diff *= -1;
+							diff = abs(z - char_z); //Check Z (we check Z first because it is far more likely to be a much greater variation than y)
 							if(diff <=  max_variation) {
 								total_diff += diff;
 								if(total_diff <=  max_variation) { //Check Total
-									diff = y - char_y; //Check Y
-									if(diff < 0)
-										diff *= -1;
+									diff = abs(y - char_y); //Check Y
 									if(diff <=  max_variation) {
 										total_diff += diff;
 										if(total_diff <= max_variation) {
@@ -5365,8 +5476,13 @@ void ZoneServer::SetupInstance(int32 createdInstanceID) {
 		instanceID = createdInstanceID;
 }
 
-void ZoneServer::RemoveDeadSpawn(Spawn* spawn){
-	AddDeadSpawn(spawn, 0);
+void ZoneServer::RemoveDeadSpawn(Spawn* spawn, bool immediate) {
+	if (immediate) {
+		if (dead_spawns.count(spawn->GetID()) > 0)
+			dead_spawns.erase(spawn->GetID());
+	} else {
+		AddDeadSpawn(spawn, 0);
+	}
 }
 
 void ZoneServer::AddDeadSpawn(Spawn* spawn, int32 timer){
@@ -5542,7 +5658,8 @@ void ZoneServer::ProcessAggroChecks(Spawn* spawn) {
 		return;
 
 	if (spawn && spawn->IsNPC() && spawn->Alive())
-		CheckEnemyList((NPC*)spawn);
+		if (!static_cast<NPC*>(spawn)->m_runningBack)
+			CheckEnemyList(static_cast<NPC*>(spawn));
 }
 
 void ZoneServer::SendUpdateTitles(Client *client, Title *suffix, Title *prefix) {
@@ -5579,12 +5696,7 @@ void ZoneServer::SendUpdateTitles(Spawn *spawn, Title *suffix, Title *prefix) {
 			prefix_title = spawn->GetPrefixTitle();
 		if (spawn->IsPlayer()) {
 			string pvp_title = PVP::GetRank(static_cast<Player*>(spawn));
-			if (pvp_title.length() > 0) {
-				if (prefix_title.length() > 0)
-					prefix_title = pvp_title + " " + prefix_title;
-				else
-					prefix_title = pvp_title;
-			}
+			packet->setMediumStringByName("pvp_title", pvp_title.c_str());
 		}
 		packet->setDataByName("prefix_title", prefix_title.c_str());
 		packet->setDataByName("last_name", spawn->GetLastName());
@@ -6061,8 +6173,10 @@ void ZoneServer::ClearHate(Entity* entity) {
 	MSpawnList.readlock(__FUNCTION__, __LINE__);
 	for (itr = spawn_list.begin(); itr != spawn_list.end(); itr++) {
 		spawn = itr->second;
-		if (spawn && spawn->IsNPC())
-			((NPC*)spawn)->Brain()->ClearHate(entity);
+		if (spawn && spawn->IsNPC() && ((NPC*)spawn)->Brain())
+			static_cast<NPC*>(spawn)->Brain()->ClearHate(entity);
+		else if (spawn && spawn->IsPlayer())
+			static_cast<Player*>(spawn)->RemoveFromEncounterList(entity->GetID());
 	}
 	MSpawnList.releasereadlock(__FUNCTION__, __LINE__);
 }

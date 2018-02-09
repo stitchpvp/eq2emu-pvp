@@ -173,6 +173,7 @@ extern MasterItemList master_item_list;
 #define ITEM_TYPE_PROFILE         16
 #define ITEM_TYPE_PATTERN         17
 #define ITEM_TYPE_ARMORSET        18
+#define ITEM_TYPE_ITEMCRATE		  18
 #define ITEM_TYPE_BOOK            19
 #define ITEM_TYPE_DECORATION      20
 #define ITEM_TYPE_DUNGEON_MAKER   21
@@ -187,39 +188,58 @@ extern MasterItemList master_item_list;
 
 
 
-#define ITEM_MENU_TYPE_GENERIC			1
-#define ITEM_MENU_TYPE_EQUIP			2
-#define ITEM_MENU_TYPE_BAG				4
-#define ITEM_MENU_TYPE_HOUSE			8
-#define ITEM_MENU_TYPE_TEST12			16	
-#define ITEM_MENU_TYPE_SCRIBE			32
-#define ITEM_MENU_TYPE_TEST13			64
-#define ITEM_MENU_TYPE_INVALID			128
-#define ITEM_MENU_TYPE_TEST14			256
-#define ITEM_MENU_TYPE_BROKEN			512
-#define ITEM_MENU_TYPE_TEST15			1024
-#define ITEM_MENU_TYPE_ATTUNED			2048
-#define ITEM_MENU_TYPE_ATTUNEABLE		4096
-#define ITEM_MENU_TYPE_BOOK				8192
-#define ITEM_MENU_TYPE_DISPLAY_CHARGES  16384
-#define ITEM_MENU_TYPE_TEST1			32768
-#define ITEM_MENU_TYPE_NAMEPET		    65536
+#define ITEM_MENU_TYPE_GENERIC			1 //0
+#define ITEM_MENU_TYPE_EQUIP			2 //1
+#define ITEM_MENU_TYPE_BAG				4//2
+#define ITEM_MENU_TYPE_HOUSE			8 //3 Place
+#define ITEM_MENU_TYPE_TEST12			16	//4
+#define ITEM_MENU_TYPE_SCRIBE			32//5
+#define ITEM_MENU_TYPE_TEST13			64//6
+#define ITEM_MENU_TYPE_INVALID			128//7
+#define ITEM_MENU_TYPE_TEST14			256//8
+#define ITEM_MENU_TYPE_BROKEN			512//9
+#define ITEM_MENU_TYPE_TEST15			1024//10
+#define ITEM_MENU_TYPE_ATTUNED			2048//11
+#define ITEM_MENU_TYPE_ATTUNEABLE		4096//12 
+#define ITEM_MENU_TYPE_BOOK				8192//13
+#define ITEM_MENU_TYPE_DISPLAY_CHARGES  16384//14
+#define ITEM_MENU_TYPE_TEST1			32768//15 Possibly toogle decorator mode
+#define ITEM_MENU_TYPE_NAMEPET		    65536 //16 Right CLick Menu
 #define ITEM_MENU_TYPE_TEST2			131072 //sets a purple background on item
-#define ITEM_MENU_TYPE_CONSUME			262144
-#define ITEM_MENU_TYPE_USE			    524288
-#define ITEM_MENU_TYPE_CONSUME_OFF		1048576
+#define ITEM_MENU_TYPE_CONSUME			262144//18
+#define ITEM_MENU_TYPE_USE			    524288//19
+#define ITEM_MENU_TYPE_CONSUME_OFF		1048576//20
 #define ITEM_MENU_TYPE_TEST3			1310720// bad number combo of 2 bits
-#define ITEM_MENU_TYPE_TEST4			2097152
-#define ITEM_MENU_TYPE_TEST5			4194304
+#define ITEM_MENU_TYPE_TEST4			2097152//21
+#define ITEM_MENU_TYPE_TEST5			4194304//22 infusable
 #define ITEM_MENU_TYPE_TEST6			8388608 //drink option on menu
-#define ITEM_MENU_TYPE_TEST7			16777216
+#define ITEM_MENU_TYPE_TEST7			16777216//24
 #define ITEM_MENU_TYPE_TEST8			33554432 // bit 25 use option in bags
-#define ITEM_MENU_TYPE_TEST9			67108864
-#define ITEM_MENU_TYPE_DAMAGED			134217728
-#define ITEM_MENU_TYPE_BROKEN2			268435456
-#define ITEM_MENU_TYPE_REDEEM	        536870912
+#define ITEM_MENU_TYPE_TEST9			67108864//26
+#define ITEM_MENU_TYPE_DAMAGED			134217728 //27
+#define ITEM_MENU_TYPE_BROKEN2			268435456 //28
+#define ITEM_MENU_TYPE_REDEEM	        536870912 //29 //READ??
+#define ITEM_MENU_TYPE_TEST10			1073741824 //30
+#define ITEM_MENU_TYPE_UNPACK			2147483648//31 * on items i found this unpack is used at same time as UNPACK below
 #define ITEM_MENU_TYPE_TEST10			1073741824
 #define ITEM_MENU_TYPE_TEST11			2147483648
+
+#define ITEM_MENU_TYPE2_TEST1			1 //0 auto consume on
+#define ITEM_MENU_TYPE2_TEST2			2 //1
+#define ITEM_MENU_TYPE2_UNPACK			4//2
+#define ITEM_MENU_TYPE2_TEST4			8 //3 
+#define ITEM_MENU_TYPE2_TEST5			16	//4
+#define ITEM_MENU_TYPE2_TEST6			32//5
+#define ITEM_MENU_TYPE2_TEST7			64//6
+#define ITEM_MENU_TYPE2_TEST8			128//7
+#define ITEM_MENU_TYPE2_TEST9			256//8
+#define ITEM_MENU_TYPE2_TEST10			512//9
+#define ITEM_MENU_TYPE2_TEST11			1024//10
+#define ITEM_MENU_TYPE2_TEST12			2048//11
+#define ITEM_MENU_TYPE2_TEST13			4096//12 
+#define ITEM_MENU_TYPE2_TEST14				8192//13
+#define ITEM_MENU_TYPE2_TEST15		 16384//14
+#define ITEM_MENU_TYPE2_TEST16			32768//15
 
 #define ITEM_TAG_UNCOMMON				3 //tier tags
 #define ITEM_TAG_TREASURED				4
@@ -495,6 +515,7 @@ extern MasterItemList master_item_list;
 #define ITEM_STAT_MAX_CRAFTING			814
 #define ITEM_STAT_COMPONENT_REFUND		815
 #define ITEM_STAT_BOUNTIFUL_HARVEST		816
+#define ITEM_STAT_PHYSICAL_DAMAGE_REDUCTION 817
 
 
 #pragma pack(1)
@@ -537,6 +558,10 @@ struct ItemStatsValues {
 	sint16			strikethrough;
 	sint16			accuracy;
 	sint16			offensivespeed;
+	sint16			mitigation_increase;
+	sint8			physical_damage_reduction;
+	float			minimum_deflection_chance;
+	float			base_avoidance_bonus;
 };
 struct ItemCore {
 	int32	item_id;
@@ -561,11 +586,19 @@ struct ItemStat {
 	int16					stat_type_combined;
 	float					value;
 };
-struct Classifications {
+struct ItemSet{
+	int32					item_id;
+	int32					item_crc;
+	int16					item_icon;
+	int16					item_stack_size;
+	int32					item_list_color;
+	
+};
+struct Classifications{
 	int32					class_id;  //classifications MJ
 	string					class_name;
 };
-struct ItemLevelOverride {
+struct ItemLevelOverride{
 	int8					adventure_class;
 	int8					tradeskill_class;
 	int16					level;
@@ -695,7 +728,15 @@ public:
 		vector<string>			recipes;
 		int8					uses;
 	};
-	struct Thrown_Info {
+	struct ItemSet_Info{
+		int32					item_id;
+		int32					item_crc;
+		int16					item_icon;
+		int32					item_stack_size;
+		int32					item_list_color;
+		
+	};
+	struct Thrown_Info{
 		sint32					range;
 		sint32					damage_modifier;
 		float					hit_bonus;
@@ -726,6 +767,7 @@ public:
 	int32					adorn2;
 	vector<Classifications*>classifications;  //classifications MJ
 	vector<ItemStat*>		item_stats;
+	vector<ItemSet*>		item_sets;
 	vector<ItemStatString*>	item_string_stats;
 	vector<ItemLevelOverride*> item_level_overrides;
 	vector<ItemEffect*>		item_effects;
@@ -742,6 +784,7 @@ public:
 	HouseContainer_Info*    housecontainer_info;
 	Skill_Info*				skill_info;
 	RecipeBook_Info*		recipebook_info;
+	ItemSet_Info*			itemset_info;
 	Thrown_Info*			thrown_info;
 	vector<int8>			slot_data;
 	ItemCore				details;
@@ -762,8 +805,10 @@ public:
 	void SetAppearance(int16 type, int8 red, int8 green, int8 blue, int8 highlight_red, int8 highlight_green, int8 highlight_blue);
 	void SetAppearance(ItemAppearance* appearance);
 	void AddStat(ItemStat* in_stat);
+	void AddSet(ItemSet* in_set);
 	void AddStatString(ItemStatString* in_stat);
 	void AddStat(int8 type, int16 subtype, float value, char* name = 0);
+	void AddSet(int32 item_id, int32 item_crc, int16 item_icon, int32 item_stack_size, int32 item_list_color);
 	void SetWeaponType(int8 type);
 	int8 GetWeaponType();
 	bool HasSlot(int8 slot, int8 slot2 = 255);
@@ -928,6 +973,7 @@ public:
 	bool	CheckEquipSlot(Item* tmp, int8 slot);
 	bool	CanItemBeEquippedInSlot(Item* tmp, int8 slot);
 	int8	GetFreeSlot(Item* tmp, int8 slot_id = 255);
+	int8	GetSlotByItem(Item* item);
 	ItemStatsValues*	CalculateEquipmentBonuses(Entity* entity = 0);
 	EQ2Packet* serialize(int16 version, Player* player = 0);
 	uchar* xor_packet;

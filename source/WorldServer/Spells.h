@@ -32,13 +32,12 @@
 #define SPELL_TARGET_OTHER			1
 #define SPELL_TARGET_GROUP_AE		2
 #define SPELL_TARGET_CASTER_PET		3
-#define SPELL_TARGET_ENEMY_PET		4
-#define SPELL_TARGET_ENEMY_CORPSE	5
+#define SPELL_TARGET_OTHER_PET		4
+#define SPELL_TARGET_OTHER_CORPSE	5
 #define SPELL_TARGET_GROUP_CORPSE	6
 #define SPELL_TARGET_NONE			7
 #define SPELL_TARGET_RAID_AE		8
 #define SPELL_TARGET_OTHER_GROUP_AE	9
-
 
 #define SPELL_BOOK_TYPE_SPELL		0
 #define SPELL_BOOK_TYPE_COMBAT_ART	1
@@ -48,7 +47,6 @@
 
 #define SPELL_CAST_TYPE_NORMAL			0
 #define SPELL_CAST_TYPE_TOGGLE			1
-
 
 #define SPELL_ERROR_NOT_ENOUGH_KNOWLEDGE					1
 #define SPELL_ERROR_INTERRUPTED								2
@@ -165,12 +163,33 @@
 #define SPELL_ERROR_NO_RESPONSE_110							113
 #define SPELL_ERROR_ALREADY_CAST_ON_TARGET					114
 
-
 #define CASTING_FLAG_MEZZED    1
 #define CASTING_FLAG_STIFLED   2
 #define CASTING_FLAG_STUNNED   4
 #define CASTING_FLAG_FEARED    8
 
+// Spell type is for AI so code knows what a spell is
+#define SPELL_TYPE_UNSET		1
+#define SPELL_TYPE_DD			2
+#define SPELL_TYPE_DOT			3
+#define SPELL_TYPE_HEAL			4
+#define SPELL_TYPE_HOT_WARD		5
+#define SPELL_TYPE_DEBUFF		6
+#define SPELL_TYPE_BUFF			7
+#define SPELL_TYPE_COMBATBUFF	8
+#define SPELL_TYPE_TAUNT		9
+#define SPELL_TYPE_DETAUNT		10
+#define SPELL_TYPE_REZ			11
+#define SPELL_TYPE_CURE			12
+
+#define SPELL_STATUS_LEARNED	1
+#define SPELL_STATUS_ENABLED	2
+#define SPELL_STATUS_QUEUED		4
+#define SPELL_STATUS_UNKNOWN4	8
+#define SPELL_STATUS_UNKNOWN5	16
+#define SPELL_STATUS_UNKNOWN6	32
+#define SPELL_STATUS_READY		64
+#define SPELL_STATUS_UNKNOWN7	128
 
 struct LUAData{
 	int8	type;
@@ -263,6 +282,7 @@ struct SpellData{
 	int8	savage_bar;
 	int8	savage_bar_slot;
 	int32	soe_spell_crc;
+	int8	spell_type;
 };
 class Spell{
 public:
@@ -281,6 +301,7 @@ public:
 	void AddSpellLuaDataString(string value);
 	int32 GetSpellID();
 	void SetPacketInformation(PacketStruct* packet, Client* client = 0, bool display_tier = false);
+	void SetSpellPacketInformation(PacketStruct* packet, Client* client = 0, bool display_tier = false, bool pvp = false);
 	int8 GetSpellTier();
 	int32 GetSpellDuration();
 	int16 GetSpellIcon();
@@ -303,7 +324,8 @@ public:
 	bool IsDamageSpell();
 	bool IsControlSpell();
 	bool IsOffenseSpell();
-	void ModifyCastTime(Entity* caster);
+	int16 GetModifiedCastTime(Entity* caster);
+	float GetModifiedRecast(Entity* caster);
 	bool CastWhileStunned();
 	bool CastWhileMezzed();
 	bool CastWhileStifled();

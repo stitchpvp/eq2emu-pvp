@@ -21,9 +21,9 @@
 #define DBCORE_H
 
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
 	#include <windows.h>
-	//#include <winsock.h>
+	//#include <WinSock2.h>
 #endif
 #include <mysql.h>
 #include "../common/types.h"

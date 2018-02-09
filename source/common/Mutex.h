@@ -20,7 +20,7 @@
 #ifndef MYMUTEX_H
 #define MYMUTEX_H
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
 	#include <windows.h>
 #else
 	#include <pthread.h>
@@ -83,7 +83,7 @@ private:
 
 	int readers;
 	bool writing;
-	bool mlocked;
+	volatile bool mlocked;
 	string name;
 };
 

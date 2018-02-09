@@ -121,7 +121,7 @@ bool Collection::NeedsItem(Item *item) {
 
 	for (itr = collection_items.begin(); itr != collection_items.end(); itr++) {
 		collection_item = *itr;
-		if (collection_item->item->details.item_id == item->details.item_id) {
+		if (collection_item->item == item->details.item_id) {
 			if (collection_item->found)
 				return false;
 			else
@@ -139,7 +139,7 @@ struct CollectionItem * Collection::GetCollectionItemByItemID(int32 item_id) {
 
 	for (itr = collection_items.begin(); itr != collection_items.end(); itr++) {
 		collection_item = *itr;
-		if (collection_item->item->details.item_id == item_id)
+		if (collection_item->item == item_id)
 			return collection_item;
 	}
 

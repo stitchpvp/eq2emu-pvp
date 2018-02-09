@@ -41,6 +41,12 @@ DataStruct::DataStruct(){
 	if_not_equals = false;
 	if_equals = false;
 	is_set = false;
+	oversized = 0;
+	oversized_byte = 0;
+	add = false;
+	addType = 0;
+	maxArraySize = 0;
+	default_value = 0;
 }
 DataStruct::DataStruct(DataStruct* data_struct){
 	type = data_struct->GetType();
@@ -1293,7 +1299,7 @@ void PacketStruct::StructLoadData(DataStruct* data_struct, void* data, int32 len
 			break;
 		}
 		case DATA_STRUCT_COLOR:{
-			if(strcmp(GetName(),"CreateCharacter") == 0)
+			if(strcmp(GetName(),"CreateCharacter") == 0 || strcmp(GetName(), "WS_SubmitCharCust") == 0)
 				CreateEQ2Color((EQ2_Color*)data);
 			else
 				LoadData((EQ2_Color*)data, len);
@@ -2367,8 +2373,8 @@ void PacketStruct::setItem(DataStruct* ds, Item* item, Player* player, int32 ind
 		return;
 	uchar* ptr = (uchar*)GetStructPointer(ds);
 	PacketStruct* packet = item->PrepareItem(client_version);
-	int16 item_version = GetItemPacketType(packet->GetVersion());
 	if(packet){
+		int16 item_version = GetItemPacketType(packet->GetVersion());
 		item->serialize(packet, true, player, item_version);
 		
 		string* generic_string_data = packet->serializeString();

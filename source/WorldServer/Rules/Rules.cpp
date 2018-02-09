@@ -57,18 +57,18 @@ RuleSet::RuleSet() {
 }
 
 RuleSet::RuleSet(RuleSet *in_rule_set) {
+	assert(in_rule_set);
+
 	map<int32, map<int32, Rule *> > * in_rules = in_rule_set->GetRules();
 	map<int32, map<int32, Rule *> >::iterator itr;
 	map<int32, Rule *>::iterator itr2;
 	Rule * rule;
-
-	assert(in_rule_set);
-	
+		
 	m_rules.SetName("RuleSet::rules");
 	id = in_rule_set->GetID();
 	strncpy(name, in_rule_set->GetName(), sizeof(name));
 	for (itr = in_rules->begin(); itr != in_rules->end(); itr++) {
-		for (itr2 = itr->second.begin(); itr2 != itr->second.end(); itr++) {
+		for (itr2 = itr->second.begin(); itr2 != itr->second.end(); itr2++) {
 			rule = itr2->second;
 			rules[rule->GetCategory()][rule->GetType()] = new Rule(rule);
 		}
@@ -80,12 +80,12 @@ RuleSet::~RuleSet() {
 }
 
 void RuleSet::CopyRulesInto(RuleSet *in_rule_set) {
+	assert(in_rule_set);
+
 	map<int32, map<int32, Rule *> > * in_rules = in_rule_set->GetRules();
 	map<int32, map<int32, Rule *> >::iterator itr;
 	map<int32, Rule *>::iterator itr2;
 	Rule * rule;
-
-	assert(in_rule_set);
 	
 	ClearRules();
 	m_rules.writelock(__FUNCTION__, __LINE__);

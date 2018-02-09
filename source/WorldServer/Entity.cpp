@@ -60,6 +60,8 @@ Entity::Entity(){
 	speed_multiplier = 1.0f;
 	m_threatTransfer = 0;
 	group_member_info = 0;
+	trade = 0;
+	deity = 0;
 	MProcList.SetName("Entity::m_procList");
 	MDetriments.SetName("Entity::MDetriments");
 	MMaintainedSpells.SetName("Entity::MMaintainedSpells");
@@ -67,9 +69,12 @@ Entity::Entity(){
 	m_procList.clear();
 	control_effects.clear();
 	immunities.clear();
+	has_secondary_weapon = false;
 
 	for(int i=0;i<NUM_SPELL_EFFECTS;i++){
-		info_struct.spell_effects[i].spell_id = 0xFFFFFFFF;	
+		info_struct.spell_effects[i].spell_id = 0xFFFFFFFF;
+		if (IsPlayer())
+			info_struct.spell_effects[i].icon = 0xFFFF;
 	}
 	for(int i=0;i<NUM_MAINTAINED_EFFECTS;i++) {
 		info_struct.maintained_effects[i].spell_id = 0xFFFFFFFF;
@@ -295,21 +300,39 @@ void Entity::SetSecondaryLastAttackTime(int32 new_time){
 
 void Entity::ChangePrimaryWeapon(){
 	Item* item = equipment_list.GetItem(EQ2_PRIMARY_SLOT);
-	if(item && item->details.item_id > 0 && item->IsWeapon()){
+	if (item && item->details.item_id > 0 && item->IsWeapon()) {
 		melee_combat_data.primary_weapon_delay = item->weapon_info->delay * 100;
 		melee_combat_data.primary_weapon_damage_low = item->weapon_info->damage_low3;
 		melee_combat_data.primary_weapon_damage_high = item->weapon_info->damage_high3;
 		melee_combat_data.primary_weapon_type = item->GetWeaponType();
 		melee_combat_data.wield_type = item->weapon_info->wield_type;
-	}
-	else{
-		melee_combat_data.primary_weapon_delay = 2000;
-		melee_combat_data.primary_weapon_damage_low = (int32)(1 + GetLevel() * .2);
-		melee_combat_data.primary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel()/5));
-		if(IsNPC())
+	} else {
+		double reducer = 10.0;
+
+		if (IsNPC()) {
+			if (IsPet()) {
+				reducer = 6.0;
+			} else {
+				reducer = 2.5;
+			}
+		}
+
+		melee_combat_data.primary_weapon_delay = 1500;
+		melee_combat_data.primary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel() / reducer));
+
+		if (IsNPC()) {
 			melee_combat_data.primary_weapon_type = ((NPC*)this)->GetAttackType();
-		else
+
+			if (GetEncounterLevel() > 6) {
+				melee_combat_data.primary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.7;
+			} else if (GetEncounterLevel() <= 6) {
+				melee_combat_data.primary_weapon_damage_high *= GetEncounterLevel() / 6.0;
+			}
+		} else {
 			melee_combat_data.primary_weapon_type = 1;
+		}
+
+		melee_combat_data.primary_weapon_damage_low = (int32)(melee_combat_data.primary_weapon_damage_high * 0.65);
 		melee_combat_data.wield_type = 2;
 	}
 	if(IsNPC())
@@ -325,13 +348,35 @@ void Entity::ChangeSecondaryWeapon(){
 		melee_combat_data.secondary_weapon_damage_low = item->weapon_info->damage_low3;
 		melee_combat_data.secondary_weapon_damage_high = item->weapon_info->damage_high3;
 		melee_combat_data.secondary_weapon_type = item->GetWeaponType();
-	}
-	else{
-		melee_combat_data.secondary_weapon_delay = 2000;
-		melee_combat_data.secondary_weapon_damage_low = (int32)(1 + GetLevel() * .2);
-		melee_combat_data.secondary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel()/6));
+		has_secondary_weapon = true;
+	} else {
+		has_secondary_weapon = false;
+
+		double reducer = 10.0;
+
+		if (IsNPC()) {
+			if (IsPet()) {
+				reducer = 6.0;
+			} else {
+				reducer = 2.5;
+			}
+		}
+
+		melee_combat_data.secondary_weapon_delay = 1500;
+		melee_combat_data.secondary_weapon_damage_high = (int32)(5 + GetLevel() * (GetLevel() / reducer));
 		melee_combat_data.secondary_weapon_type = 1;
+
+		if (IsNPC()) {
+			if (GetEncounterLevel() > 6) {
+				melee_combat_data.secondary_weapon_damage_high *= (GetEncounterLevel() - 3) / 2.7;
+			} else if (GetEncounterLevel() <= 6) {
+				melee_combat_data.secondary_weapon_damage_high *= GetEncounterLevel() / 6.0;
+			}
+		}
+
+		melee_combat_data.secondary_weapon_damage_low = (int32)(melee_combat_data.secondary_weapon_damage_high * 0.65);
 	}
+
 	if(IsNPC())
 		melee_combat_data.secondary_weapon_damage_high += (int32)(GetInfoStruct()->str / 10);
 	else
@@ -384,8 +429,10 @@ int8 Entity::GetRangedWeaponType(){
 	return ranged_combat_data.ranged_weapon_type;
 }
 
-bool Entity::IsDualWield(){
-	return melee_combat_data.wield_type == 1;
+bool Entity::IsDualWield() {
+	if (has_secondary_weapon && (melee_combat_data.wield_type == 1 || melee_combat_data.wield_type == 2))
+		return true;
+	return false;
 }
 
 int8 Entity::GetWieldType(){
@@ -520,7 +567,7 @@ void Entity::AddMaintainedSpell(LuaSpell* luaspell){
 		effect->spell = luaspell;
 		effect->spell_id = spell->GetSpellData()->id;
 		LogWrite(NPC__SPELLS, 5, "NPC", "AddMaintainedSpell Spell ID: %u", spell->GetSpellData()->id);
-		effect->conc_used = spell->GetSpellData()->req_concentration / 256;
+		effect->conc_used = spell->GetSpellData()->req_concentration;
 		effect->total_time = spell->GetSpellDuration() / 10;
 		effect->tier = spell->GetSpellData()->tier;
 		if (spell->GetSpellData()->duration_until_cancel)
@@ -565,47 +612,29 @@ void Entity::AddSpellEffect(LuaSpell* luaspell){
 }
 
 void Entity::RemoveMaintainedSpell(LuaSpell* luaspell){
-	printf("starting\n");
-	fflush(stdout);
 	if (!luaspell)
 		return;
 
 	bool found = false;
-	printf("start lock\n");
-	fflush(stdout);
 	MMaintainedSpells.writelock(__FUNCTION__, __LINE__);
 	for (int i = 0; i<30; i++){
-		printf("loop through maintained: %d\n", i);
-		fflush(stdout);
 		// If we already found the spell then we are bumping all other up one so there are no gaps
 		// This check needs to be first so found can never be true on the first iteration (i = 0)
 		if (found) {
-			printf("doing a bump in: %d\n", i);
-			fflush(stdout);
 			GetInfoStruct()->maintained_effects[i].slot_pos = i - 1;
 			GetInfoStruct()->maintained_effects[i - 1] = GetInfoStruct()->maintained_effects[i];
-			printf("did a bump in: %d\n", i);
-			fflush(stdout);
 
 		}
 		// Compare spells, if we found a match set the found flag
-		printf("doing a comparison in: %d\n", i);
-		fflush(stdout);
 		if (GetInfoStruct()->maintained_effects[i].spell == luaspell)
 			found = true;
 
 	}
 	// if we found the spell in the array then we need to set the last element to empty
-	printf("loop done\n");
-	fflush(stdout);
 	if (found) {
 		memset(&GetInfoStruct()->maintained_effects[29], 0, sizeof(MaintainedEffects));
-		printf("did memset\n");
-		fflush(stdout);
 		GetInfoStruct()->maintained_effects[29].spell_id = 0xFFFFFFFF;
 		GetInfoStruct()->maintained_effects[29].icon = 0xFFFF;
-		printf("did 0xFFFF\n");
-		fflush(stdout);
 	}
 	MMaintainedSpells.releasewritelock(__FUNCTION__, __LINE__);
 }
@@ -770,20 +799,20 @@ void Entity::CalculateBonuses(){
 	info->noxious_base = info->poison;
 	info->arcane_base = info->magic;
 
-	info->sta = info->sta_base;
-	info->agi = info->agi_base;
-	info->str = info->str_base;
-	info->wis = info->wis_base;
-	info->intel = info->intel_base;
+	info->sta = info->sta_base + info->sta_temp;
+	info->agi = info->agi_base + info->agi_temp;
+	info->str = info->str_base + info->str_temp;
+	info->wis = info->wis_base + info->wis_temp;
+	info->intel = info->intel_base + info->intel_temp;
 	info->ability_modifier = 0;
 	info->critical_mitigation = 0;
 	info->block_chance = 0;
-	info->crit_chance = 0;
+	info->crit_chance = info->crit_chance_temp;
 	info->crit_bonus = 0;
 	info->potency = 0;
 	info->hate_mod = 0;
-	info->reuse_speed = 0;
-	info->casting_speed = 0;
+	info->reuse_speed = info->reuse_speed_temp;
+	info->casting_speed = info->casting_speed_temp;
 	info->recovery_speed = 0;
 	info->spell_reuse_speed = 0;
 	info->spell_multi_attack = 0;
@@ -797,23 +826,69 @@ void Entity::CalculateBonuses(){
 	info->strikethrough = 0;
 	info->accuracy = 0;
 	info->offensivespeed = 0;
+	info->base_avoidance_bonus = 0;
+	info->minimum_deflection_chance = 0;
+	info->physical_damage_reduction = 0;
 
 	stats.clear();
 	ItemStatsValues* values = equipment_list.CalculateEquipmentBonuses(this);
 	CalculateSpellBonuses(values);
+
 	info->sta += values->sta;
+	if (info->sta < 0)
+		info->sta = 0;
+
 	info->str += values->str;
+	if (info->str < 0)
+		info->str = 0;
+
 	info->agi += values->agi;
+	if (info->agi < 0)
+		info->agi = 0;
+
 	info->wis += values->wis;
+	if (info->wis < 0)
+		info->wis = 0;
+
 	info->intel += values->int_;
+	if (info->intel < 0)
+		info->intel = 0;
 
 	info->disease += values->vs_disease;
+	if (info->disease < 0)
+		info->disease = 0;
+
 	info->divine += values->vs_divine;
+	if (info->divine < 0)
+		info->divine = 0;
+
 	info->heat += values->vs_heat;
+	if (info->heat < 0)
+		info->heat = 0;
+
 	info->magic += values->vs_magic;
+	if (info->magic < 0)
+		info->magic = 0;
+
+	info->mental += values->vs_mental;
+	if (info->mental < 0)
+		info->mental = 0;
+
+	info->poison += values->vs_poison;
+	if (info->poison < 0)
+		info->poison = 0;
+
+	info->cold += values->vs_cold;
+	if (info->cold < 0)
+		info->cold = 0;
+
+	info->cur_mitigation += info->cur_mitigation * (values->mitigation_increase / 100.0);
 	info->cur_mitigation += values->vs_slash;
 	info->cur_mitigation += values->vs_pierce;
 	info->cur_mitigation += values->vs_crush;
+	if (info->cur_mitigation < 0)
+		info->cur_mitigation = 0;
+
 	int32 sta_hp_bonus = 0.0;
 	int32 prim_power_bonus = 0.0;
 	float bonus_mod = 0.0;
@@ -830,10 +905,7 @@ void Entity::CalculateBonuses(){
 		SetHP(GetTotalHP());
 	if(GetPower() > GetTotalPower())
 		SetPower(GetTotalPower());
-	info->mental += values->vs_mental;
-	info->poison += values->vs_poison;
 	info->max_concentration += values->concentration;
-	info->cold += values->vs_cold;
 	info->mitigation_skill1 += values->vs_slash;
 	info->mitigation_skill2 += values->vs_pierce;
 	info->mitigation_skill3 += values->vs_crush;
@@ -858,6 +930,9 @@ void Entity::CalculateBonuses(){
 	info->strikethrough += values->strikethrough;
 	info->accuracy += values->accuracy;
 	info->offensivespeed += values->offensivespeed;
+	info->base_avoidance_bonus += values->base_avoidance_bonus;
+	info->minimum_deflection_chance += values->minimum_deflection_chance;
+	info->physical_damage_reduction += values->physical_damage_reduction;
 	safe_delete(values);
 }
 
@@ -901,6 +976,7 @@ void Entity::AddSpellBonus(LuaSpell* spell, int16 type, sint32 value, int64 clas
 	//CheckSpellBonusRemoval(spell, type);
 	BonusValues* bonus = new BonusValues;
 	bonus->luaspell = spell;
+	bonus->spell_id = spell->spell->GetSpellID();
 	bonus->type = type;
 	bonus->value = value;
 	bonus->class_req = class_req;
@@ -975,8 +1051,9 @@ void Entity::CalculateSpellBonuses(ItemStatsValues* stats){
 			}
 			//We've found the highest tier for this spell id, so add the bonuses
 			vector<BonusValues*>* final_bonuses = &sort_itr->second[key];
-			for (int8 i = 0; i < final_bonuses->size(); i++)
+			for (int8 i = 0; i < final_bonuses->size(); i++) {
 				world.AddBonuses(stats, final_bonuses->at(i)->type, final_bonuses->at(i)->value, this);
+			}
 		}
 	}
 }
@@ -1316,6 +1393,7 @@ float Entity::GetSpeed() {
 		ret += max(stats[ITEM_STAT_SPEED], stats[ITEM_STAT_MOUNTSPEED]);
 
 	ret *= speed_multiplier;
+	ret -= GetHighestSnare();
 	return ret;
 }
 
@@ -1383,59 +1461,57 @@ void Entity::ClearAllDetriments() {
 	MDetriments.releasewritelock(__FUNCTION__, __LINE__);
 }
 
-void Entity::CureDetrimentByType(int8 cure_count, int8 det_type, string cure_name, Entity* caster, int8 cure_level) {
-	if (cure_count <= 0 || GetDetTypeCount(det_type) <= 0)
+void Entity::CureDetrimentByType(int8 cure_level, int8 det_type, string cure_name, Entity* caster) {
+	if (cure_level <= 0 || (GetDetTypeCount(det_type) <= 0 && (det_type == DET_TYPE_ALL && GetDetCount() <= 0)))
 		return;
 
 	vector<DetrimentalEffects>* det_list = &detrimental_spell_effects;
-	DetrimentalEffects* det;
-	vector<LuaSpell*> remove_list;
-	LuaSpell* spell = 0;
-	vector<LevelArray*>* levels;
-	int8 caster_class1 = 0;
-	int8 caster_class2 = 0;
-	int8 caster_class3 = 0;
-	int8 level_class = 0;
-	InfoStruct* info_struct = 0;
-	bool pass_level_check = false;
+	map<int8, vector<LuaSpell*>> remove_list;
+	int8 total_cure_level = 0;
 
 	MDetriments.readlock(__FUNCTION__, __LINE__);
-	for (int32 i = 0; i<det_list->size(); i++){
-		det = &det_list->at(i);
-		if (det && det->det_type == det_type && !det->incurable){
-			levels = det->spell->spell->GetSpellLevels();
-			info_struct = det->caster->GetInfoStruct();
-			caster_class1 = info_struct->class1;
-			caster_class2 = info_struct->class2;
-			caster_class3 = info_struct->class3;
-			pass_level_check = false;
-			for (int32 x = 0; x < levels->size(); x++){
-				level_class = levels->at(x)->adventure_class;
-				if (!cure_level || ((caster_class1 == level_class || caster_class2 == level_class || caster_class3 == level_class)
-					&& cure_level >= (levels->at(x)->spell_level / 10))){
-					pass_level_check = true;
-					break;
+	for (const auto& det : *det_list) {
+		if ((det.det_type == det_type || (det_type == DET_TYPE_ALL && det.det_type != DET_TYPE_CURSE)) && !det.incurable) {
+			vector<LevelArray*>* levels = det.spell->spell->GetSpellLevels();
+			InfoStruct* info_struct = det.caster->GetInfoStruct();
+
+			if (levels->size() > 0) {
+				for (const auto x : *levels) {
+					int8 level = x->spell_level / 10;
+					int8 det_class = x->adventure_class;
+
+					if ((info_struct->class1 == det_class || info_struct->class2 == det_class || info_struct->class3 == det_class || det.caster->GetAdventureClass() == det_class) && cure_level >= level) {
+						det.spell->was_cured = true;
+						remove_list[level].push_back(det.spell);
+						break;
+					}
 				}
-			}
-			if (pass_level_check){
-				remove_list.push_back(det->spell);
-				cure_count--;
-				if (cure_count == 0)
-					break;
+			} else if (cure_level >= det.caster->GetLevel()) {
+				det.spell->was_cured = true;
+				remove_list[det.caster->GetLevel()].push_back(det.spell);
+				break;
 			}
 		}
 	}
 	MDetriments.releasereadlock(__FUNCTION__, __LINE__);
 
-	for (int32 i = 0; i<remove_list.size(); i++){
-		spell = remove_list.at(i);
-		GetZone()->SendDispellPacket(caster, this, cure_name, (string)remove_list.at(i)->spell->GetName(), DISPELL_TYPE_CURE);
-		if (GetZone())
-			GetZone()->RemoveTargetFromSpell(spell, this);
-		RemoveSpellEffect(spell);
-		RemoveDetrimentalSpell(spell);
+	for (auto it = remove_list.rbegin(); it != remove_list.rend(); ++it) {
+		if (total_cure_level + it->first > cure_level) break;
+
+		for (const auto spell : it->second) {
+			if (total_cure_level + it->first > cure_level) break;
+
+			GetZone()->SendDispellPacket(caster, this, cure_name, (string)spell->spell->GetName(), DISPELL_TYPE_CURE);
+
+			if (GetZone())
+				GetZone()->RemoveTargetFromSpell(spell, this);
+
+			RemoveSpellEffect(spell);
+			RemoveDetrimentalSpell(spell);
+
+			total_cure_level += it->first;
+		}
 	}
-	remove_list.clear();
 }
 
 void Entity::CureDetrimentByControlEffect(int8 cure_count, int8 control_type, string cure_name, Entity* caster, int8 cure_level) {
@@ -1615,12 +1691,32 @@ void Entity::CancelAllStealth() {
 	}
 }
 
-bool Entity::CanAttackTarget(Spawn *target) {
-	if (IsPlayer() && (target->IsPlayer() || target->IsPet() && ((NPC*)target)->GetOwner()->IsPlayer())) {
-		return PVP::CanAttack((Player*)this, target);
+bool Entity::CanAttackTarget(Spawn* target) {
+	if (target == this)
+		return false;
+
+	if (IsPlayer() && (target->IsPlayer() || (target->IsPet() && static_cast<NPC*>(target)->GetOwner()->IsPlayer()))) {
+		return PVP::CanAttack(static_cast<Player*>(this), target);
 	} else {
-		if (target->IsPlayer())
+		if (target->IsPlayer()) {
 			return true;
+		} else if (target->IsNPC()) {
+			return !static_cast<NPC*>(target)->m_runningBack && target->GetAttackable();
+		} else {
+			return target->GetAttackable();
+		}
+	}
+}
+
+bool Entity::IsHostile(Spawn* target) {
+	if (target == this)
+		return false;
+
+	if (IsPlayer() && (target->IsPlayer() || (target->IsPet() && ((NPC*)target)->GetOwner()->IsPlayer()))) {
+		return PVP::IsHostile(static_cast<Player*>(this), target);
+	} else if (target->IsPlayer()) {
+		return true;
+	} else {
 		return target->GetAttackable();
 	}
 }
@@ -1649,7 +1745,7 @@ void Entity::AddStealthSpell(LuaSpell* spell) {
 		AddChangedZoneSpawn();
 		if (IsPlayer()) {
 			((Player*)this)->SetResendSpawns(true);
-			((Player*)this)->SetCharSheetChanged(true);
+			//((Player*)this)->SetCharSheetChanged(true);
 		}
 	}
 }
@@ -1735,10 +1831,8 @@ void Entity::RemoveRootSpell(LuaSpell* spell) {
 		if (IsPlayer()){
 			if (!IsMezzedOrStunned())
 				((Player*)this)->SetPlayerControlFlag(1, 8, false); // heading movement only
-		}
-		else {
-			// GetHighestSnare() will return 1.0f if no snares returning the spawn to full speed
-			SetSpeedMultiplier(GetHighestSnare());
+		} else {
+			SetSpeedMultiplier(1.0f);
 		}
 	}
 }
@@ -1781,11 +1875,6 @@ void Entity::AddSnareSpell(LuaSpell* spell) {
 		control_effects[CONTROL_EFFECT_TYPE_SNARE] = new MutexList<LuaSpell*>;
 
 	control_effects[CONTROL_EFFECT_TYPE_SNARE]->Add(spell);
-
-	// Don't set speed multiplier if there is a root or no snare values
-	MutexList<LuaSpell*>* roots = control_effects[CONTROL_EFFECT_TYPE_ROOT];
-	if ((!roots || roots->size(true) == 0) && snare_values.size() > 0)
-		SetSpeedMultiplier(GetHighestSnare());
 }
 
 void Entity::RemoveSnareSpell(LuaSpell* spell) {
@@ -1795,16 +1884,6 @@ void Entity::RemoveSnareSpell(LuaSpell* spell) {
 
 	snare_list->Remove(spell);
 	snare_values.erase(spell);
-
-	//LogWrite(PLAYER__ERROR, 0, "Debug", "snare_values.size() = %u", snare_values.size());
-
-	// only change speeds if there are no roots
-	MutexList<LuaSpell*>* roots = control_effects[CONTROL_EFFECT_TYPE_ROOT];
-	if (!roots || roots->size(true) == 0) {
-		float multiplier = GetHighestSnare();
-		//LogWrite(PLAYER__ERROR, 0, "Debug", "GetHighestSnare() = %f", multiplier);
-		SetSpeedMultiplier(multiplier);
-	}
 }
 
 void Entity::SetSnareValue(LuaSpell* spell, float snare_val) {
@@ -1816,14 +1895,14 @@ void Entity::SetSnareValue(LuaSpell* spell, float snare_val) {
 
 float Entity::GetHighestSnare() {
 	// For simplicity this will return the highest snare value, which is actually the lowest value
-	float ret = 1.0f;
+	float ret = 0.0f;
 
 	if (snare_values.size() == 0)
 		return ret;
 
 	map<LuaSpell*, float>::iterator itr;
 	for (itr = snare_values.begin(); itr != snare_values.end(); itr++) {
-		if (itr->second < ret)
+		if (itr->second > ret)
 			ret = itr->second;
 	}
 
@@ -2146,8 +2225,19 @@ void Entity::RemoveEffectsFromLuaSpell(LuaSpell* spell){
 		RemoveFearSpell(spell);
 	if (effect_bitmask & EFFECT_FLAG_SPELLBONUS)
 		RemoveSpellBonus(spell);
-	if (effect_bitmask & EFFECT_FLAG_SKILLBONUS)
+	if (effect_bitmask & EFFECT_FLAG_SKILLBONUS) {
 		RemoveSkillBonus(spell->spell->GetSpellID());
+
+		if (IsPlayer()) {
+			Client* client = GetZone()->GetClientBySpawn(this);
+
+			if (client) {
+				EQ2Packet* packet = static_cast<Player*>(this)->GetSkills()->GetSkillPacket(client->GetVersion());
+				if (packet)
+					client->QueuePacket(packet);
+			}
+		}
+	}
 	if (effect_bitmask & EFFECT_FLAG_STEALTH)
 		RemoveStealthSpell(spell);
 	if (effect_bitmask & EFFECT_FLAG_INVIS)
@@ -2271,4 +2361,167 @@ void Entity::UpdateGroupMemberInfo() {
 		group_member_info->zone = GetZone()->GetZoneDescription();
 	else
 		group_member_info->zone = "Unknown";
+}
+
+#include "WorldDatabase.h"
+extern WorldDatabase database;
+void Entity::CustomizeAppearance(PacketStruct* packet) {
+
+	bool		is_soga						= packet->getType_int8_ByName("is_soga") == 1 ? true : false;
+	int16		model_id					= database.GetAppearanceID(packet->getType_EQ2_16BitString_ByName("race_file").data);
+	EQ2_Color	skin_color					= packet->getType_EQ2_Color_ByName("skin_color");
+	EQ2_Color	skin_color2					= packet->getType_EQ2_Color_ByName("skin_color2");
+	EQ2_Color	eye_color					= packet->getType_EQ2_Color_ByName("eye_color");
+	EQ2_Color	hair_color1					= packet->getType_EQ2_Color_ByName("hair_color1");
+	EQ2_Color	hair_color2					= packet->getType_EQ2_Color_ByName("hair_color2");
+	EQ2_Color	hair_highlight				= packet->getType_EQ2_Color_ByName("hair_highlight");
+	int16		hair_id						= database.GetAppearanceID(packet->getType_EQ2_16BitString_ByName("hair_file").data);
+	EQ2_Color	hair_type_color				= packet->getType_EQ2_Color_ByName("hair_type_color");
+	EQ2_Color	hair_type_highlight_color	= packet->getType_EQ2_Color_ByName("hair_type_highlight_color");
+	int16		face_id						= database.GetAppearanceID(packet->getType_EQ2_16BitString_ByName("face_file").data);
+	EQ2_Color	hair_face_color				= packet->getType_EQ2_Color_ByName("hair_face_color");
+	EQ2_Color	hair_face_highlight_color	= packet->getType_EQ2_Color_ByName("hair_face_highlight_color");
+	int16		wing_id						= database.GetAppearanceID(packet->getType_EQ2_16BitString_ByName("wing_file").data);
+	EQ2_Color	wing_color1					= packet->getType_EQ2_Color_ByName("wing_color1");
+	EQ2_Color	wing_color2					= packet->getType_EQ2_Color_ByName("wing_color2");
+	int16		chest_id					= database.GetAppearanceID(packet->getType_EQ2_16BitString_ByName("chest_file").data);
+	EQ2_Color	shirt_color					= packet->getType_EQ2_Color_ByName("shirt_color");
+	EQ2_Color	unknown_chest_color			= packet->getType_EQ2_Color_ByName("unknown_chest_color");
+	int16		legs_id						= database.GetAppearanceID(packet->getType_EQ2_16BitString_ByName("legs_file").data);
+	EQ2_Color	pants_color					= packet->getType_EQ2_Color_ByName("pants_color");
+	EQ2_Color	unknown_legs_color			= packet->getType_EQ2_Color_ByName("unknown_legs_color");
+	EQ2_Color	unknown2					= packet->getType_EQ2_Color_ByName("unknown2");
+
+	float eyes2[3];
+	eyes2[0] = packet->getType_float_ByName("eyes2", 0) * 100;
+	eyes2[1] = packet->getType_float_ByName("eyes2", 1) * 100;
+	eyes2[2] = packet->getType_float_ByName("eyes2", 2) * 100;
+
+	float ears[3];
+	ears[0] = packet->getType_float_ByName("ears", 0) * 100;
+	ears[1] = packet->getType_float_ByName("ears", 1) * 100;
+	ears[2] = packet->getType_float_ByName("ears", 2) * 100;
+
+	float eye_brows[3];
+	eye_brows[0] = packet->getType_float_ByName("eye_brows", 0) * 100;
+	eye_brows[1] = packet->getType_float_ByName("eye_brows", 1) * 100;
+	eye_brows[2] = packet->getType_float_ByName("eye_brows", 2) * 100;
+
+	float cheeks[3];
+	cheeks[0] = packet->getType_float_ByName("cheeks", 0) * 100;
+	cheeks[1] = packet->getType_float_ByName("cheeks", 1) * 100;
+	cheeks[2] = packet->getType_float_ByName("cheeks", 2) * 100;
+
+	float lips[3];
+	lips[0] = packet->getType_float_ByName("lips", 0) * 100;
+	lips[1] = packet->getType_float_ByName("lips", 1) * 100;
+	lips[2] = packet->getType_float_ByName("lips", 2) * 100;
+
+	float chin[3];
+	chin[0] = packet->getType_float_ByName("chin", 0) * 100;
+	chin[1] = packet->getType_float_ByName("chin", 1) * 100;
+	chin[2] = packet->getType_float_ByName("chin", 2) * 100;
+
+	float nose[3];
+	nose[0] = packet->getType_float_ByName("nose", 0) * 100;
+	nose[1] = packet->getType_float_ByName("nose", 1) * 100;
+	nose[2] = packet->getType_float_ByName("nose", 2) * 100;
+
+	sint8 body_size = (sint8)(packet->getType_float_ByName("body_size") * 100);
+	sint8 body_age = (sint8)(packet->getType_float_ByName("body_age") * 100);
+
+	if (is_soga) {
+		appearance.soga_model_type = model_id;
+		features.soga_skin_color = skin_color;
+		features.soga_eye_color = eye_color;
+		features.soga_hair_color1 = hair_color1;
+		features.soga_hair_color2 = hair_color2;
+		features.soga_hair_highlight_color = hair_highlight;
+		features.soga_hair_type = hair_id;
+		features.soga_hair_type_color = hair_type_color;
+		features.soga_hair_type_highlight_color = hair_type_highlight_color;
+		features.soga_hair_face_type = face_id;
+		features.soga_hair_face_color = hair_face_color;
+		features.soga_hair_face_highlight_color = hair_face_highlight_color;
+		features.wing_type = wing_id;
+		features.wing_color1 = wing_color1;
+		features.wing_color2 = wing_color2;
+		features.soga_chest_type = chest_id;
+		features.shirt_color = shirt_color;
+		features.soga_legs_type = legs_id;
+		features.pants_color = pants_color;
+		features.soga_eye_type[0] = eyes2[0];
+		features.soga_eye_type[1] = eyes2[1];
+		features.soga_eye_type[2] = eyes2[2];
+		features.soga_ear_type[0] = ears[0];
+		features.soga_ear_type[0] = ears[1];
+		features.soga_ear_type[0] = ears[2];
+		features.soga_eye_brow_type[0] = eye_brows[0];
+		features.soga_eye_brow_type[1] = eye_brows[1];
+		features.soga_eye_brow_type[2] = eye_brows[2];
+		features.soga_cheek_type[0] = cheeks[0];
+		features.soga_cheek_type[1] = cheeks[1];
+		features.soga_cheek_type[2] = cheeks[2];
+		features.soga_lip_type[0] = lips[0];
+		features.soga_lip_type[1] = lips[1];
+		features.soga_lip_type[2] = lips[2];
+		features.soga_chin_type[0] = chin[0];
+		features.soga_chin_type[1] = chin[1];
+		features.soga_chin_type[2] = chin[2];
+		features.soga_nose_type[0] = nose[0];
+		features.soga_nose_type[1] = nose[1];
+		features.soga_nose_type[2] = nose[2];
+	}
+	else {
+		appearance.model_type = model_id;
+		features.skin_color = skin_color;
+		features.eye_color = eye_color;
+		features.hair_color1 = hair_color1;
+		features.hair_color2 = hair_color2;
+		features.hair_highlight_color = hair_highlight;
+		features.hair_type = hair_id;
+		features.hair_type_color = hair_type_color;
+		features.hair_type_highlight_color = hair_type_highlight_color;
+		features.hair_face_type = face_id;
+		features.hair_face_color = hair_face_color;
+		features.hair_face_highlight_color = hair_face_highlight_color;
+		features.wing_type = wing_id;
+		features.wing_color1 = wing_color1;
+		features.wing_color2 = wing_color2;
+		features.chest_type = chest_id;
+		features.shirt_color = shirt_color;
+		features.legs_type = legs_id;
+		features.pants_color = pants_color;
+		features.eye_type[0] = eyes2[0];
+		features.eye_type[1] = eyes2[1];
+		features.eye_type[2] = eyes2[2];
+		features.ear_type[0] = ears[0];
+		features.ear_type[0] = ears[1];
+		features.ear_type[0] = ears[2];
+		features.eye_brow_type[0] = eye_brows[0];
+		features.eye_brow_type[1] = eye_brows[1];
+		features.eye_brow_type[2] = eye_brows[2];
+		features.cheek_type[0] = cheeks[0];
+		features.cheek_type[1] = cheeks[1];
+		features.cheek_type[2] = cheeks[2];
+		features.lip_type[0] = lips[0];
+		features.lip_type[1] = lips[1];
+		features.lip_type[2] = lips[2];
+		features.chin_type[0] = chin[0];
+		features.chin_type[1] = chin[1];
+		features.chin_type[2] = chin[2];
+		features.nose_type[0] = nose[0];
+		features.nose_type[1] = nose[1];
+		features.nose_type[2] = nose[2];
+	}
+
+	features.body_size = body_size;
+	features.body_age = body_age;
+	info_changed = true;
+	changed = true;
+}
+
+void Entity::AddSkillBonus(int32 spell_id, int32 skill_id, float value) {
+	// handled in npc or player
+	return;
 }

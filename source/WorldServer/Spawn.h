@@ -35,6 +35,7 @@
 #include <deque>
 
 #define DAMAGE_PACKET_TYPE_SIPHON_SPELL		0x41
+#define DAMAGE_PACKET_TYPE_SIPHON_SPELL_CRIT_DMG	0x45
 #define DAMAGE_PACKET_TYPE_SIPHON_SPELL2	0x49
 #define DAMAGE_PACKET_TYPE_MULTIPLE_DAMAGE	0x80
 #define DAMAGE_PACKET_TYPE_SIMPLE_DAMAGE	0xC0
@@ -141,6 +142,12 @@ class Spell;
 class ZoneServer;
 class Quest;
 struct LUAHistory;
+struct Cell;
+
+struct CellInfo {
+	Cell* CurrentCell;
+	int CellListIndex;
+};
 
 struct MovementData{
 	float x;
@@ -149,6 +156,11 @@ struct MovementData{
 	float speed;
 	int32 delay;
 	string lua_function;
+};
+
+struct ActivityStatus {
+	int16 status;
+	int32 end_time;
 };
 
 struct BasicInfoStruct{
@@ -189,6 +201,8 @@ class Spawn {
 public:
 	Spawn();
 	virtual ~Spawn();
+
+	int temp_info_type = -1;
 
 	template <class Field, class Value> void Set(Field* field, Value value, bool setUpdateFlags = true){
 		if (setUpdateFlags) {
@@ -328,6 +342,7 @@ public:
 		SetPos(&appearance.pos.Dir2, dir2, updateFlags);
 	}
 	void SetHeading(float heading, bool updateFlags = true){
+		last_heading_angle = heading;
 		if (heading != 180)
 			heading = (heading - 180) * 64;
 		SetPos(&appearance.pos.Dir1, (sint16)heading, updateFlags);
@@ -371,6 +386,9 @@ public:
 	}
 	void SetActivityStatus(int16 state, bool updateFlags = true){ 
 		SetInfo(&appearance.activity_status, state, updateFlags);
+	}
+	void SetActivityTimer(int32 timer, bool updateFlags = true) {
+		SetInfo(&appearance.activity_timer, timer, updateFlags);
 	}
 	void SetCollisionRadius(int32 radius, bool updateFlags = true){ 
 		SetPos(&appearance.pos.collision_radius, radius, updateFlags);
@@ -601,6 +619,7 @@ public:
 	sint32 GetSavagery();
 	sint32 GetTotalDissonance();
 	sint32 GetDissonance();
+	void ScalePet();
 	sint32 GetTotalSavageryBase();
 	sint32 GetTotalDissonanceBase();
 	sint16 GetAssignedAA();
@@ -732,6 +751,7 @@ public:
 	virtual bool IsPlayer(){ return false; }
 	virtual bool IsWidget(){ return false; }
 	virtual bool IsSign(){ return false; }
+	virtual bool IsBot() { return false; }
 
 	bool			HasInfoChanged(){ return info_changed; }
 	bool			HasPositionChanged(){ return position_changed; }	
@@ -917,6 +937,14 @@ public:
 	}
 	int16 GetIllusionModel() { return m_illusionModel; }
 
+	int8 size_mod_a;
+	int8 size_mod_b;
+	int8 size_mod_c;
+	int8 size_shrink_multiplier;
+	int8 size_mod_unknown;
+
+	CellInfo Cell_Info;
+
 protected:
 	bool	send_spawn_changes;
 	bool	invulnerable;
@@ -948,6 +976,7 @@ private:
 	deque<MovementLocation*>* movement_locations;
 	Mutex*			MMovementLocations;
 	Mutex*			MSpawnGroup;
+	Mutex*			MActivityStatuses;
 	int8			size_offset;
 	int				tmp_visual_state;
 	int				tmp_action_state;
@@ -973,6 +1002,7 @@ private:
 	bool            req_quests_private;
 	int16           req_quests_override;
 	bool            req_quests_continued_access;
+	float			last_heading_angle;
 
 	map<string, int8>			m_tempVariableTypes;
 	map<string, int32>			m_tempVariableSpawn;
@@ -981,6 +1011,7 @@ private:
 	map<string, Quest*>			m_tempVariableQuest;
 	// m_tempVariables = stores user defined variables from lua, will not persist through a zone
 	map<string, string>			m_tempVariables;
+	vector<ActivityStatus*>     activity_statuses;
 
 	int16						m_illusionModel;
 

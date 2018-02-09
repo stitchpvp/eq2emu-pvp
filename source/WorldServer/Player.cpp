@@ -31,6 +31,7 @@
 #include "SpellProcess.h"
 #include <algorithm>
 #include "ClientPacketFunctions.h"
+#include "PVP.h"
 
 extern Classes classes;
 extern WorldDatabase database;
@@ -56,6 +57,7 @@ Player::Player(){
 	//speed = 0;
 	packet_num = 0;
 	range_attack = false;
+	melee_attack = false;
 	old_movement_packet = 0;
 	charsheet_changed = false;
 	quickbar_updated = false;
@@ -69,6 +71,7 @@ Player::Player(){
 	LogWrite(MISC__TODO, 1, "TODO", "Add player commands here\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
 
 	appearance.display_name = 1;
+	appearance.encounter_level = 1;
 	appearance.show_command_icon = 1;
 	appearance.player_flag = 1;
 	appearance.targetable = 1;
@@ -125,6 +128,8 @@ Player::~Player(){
 	for (itr = player_spawn_history_required.begin(); itr != player_spawn_history_required.end(); itr++){
 		safe_delete(itr->second);
 	}
+
+	activity_statuses.clear();
 
 	map<int8, map<int8, vector<HistoryData*> > >::iterator itr1;
 	map<int8, vector<HistoryData*> >::iterator itr2;
@@ -561,7 +566,7 @@ EQ2Packet* PlayerInfo::serialize3(PacketStruct* packet, int16 version){
 	return 0;
 }
 
-void PlayerInfo::SetAccountAge(int8 age){
+void PlayerInfo::SetAccountAge(int16 age){
 	info_struct->account_age_base = age;
 }
 
@@ -595,6 +600,10 @@ EQ2Packet* PlayerInfo::serialize(int16 version){
 		packet->setDataByName("bonus_health", bonus_health);
 		packet->setDataByName("stat_bonus_health", player->CalculateBonusMod());
 		packet->setDataByName("current_power", player->GetPower());
+		packet->setDataByName("unknown6", 4294967261, 0);
+		packet->setDataByName("unknown6", 625, 1);
+		packet->setDataByName("unknown7", -1, 0);
+		packet->setDataByName("unknown7", -1, 1);
 		packet->setDataByName("max_power", player->GetTotalPower());
 		packet->setDataByName("base_power", player->GetTotalPowerBase());
 		packet->setDataByName("bonus_power", floor( (float)(player->GetPrimaryStat() * player->CalculateBonusMod())));
@@ -697,11 +706,9 @@ EQ2Packet* PlayerInfo::serialize(int16 version){
 			player->SetPowerRegen(info_struct->level+(int)(info_struct->level/10)+4);
 		packet->setDataByName("hp_regen", player->GetHPRegen() + player->stats[ITEM_STAT_HPREGEN]);
 		packet->setDataByName("power_regen", player->GetPowerRegen() + player->stats[ITEM_STAT_MANAREGEN]);
-		packet->setDataByName("unknown11", -1, 0);
-		packet->setDataByName("unknown11", -1, 1);
 		packet->setDataByName("mitigation2_cur", 2367);
-		packet->setDataByName("mitigation_pct_pve", player->GetMitigationPercentage() * 1000); // Mitigation % vs PvE
-		packet->setDataByName("mitigation_pct_pvp", player->GetMitigationPercentage() * 1000); // Mitigation % vs PvP
+		packet->setDataByName("mitigation_pct_pve", player->GetMitigationPercentage(player->GetLevel()) * 1000); // Mitigation % vs PvE
+		packet->setDataByName("mitigation_pct_pvp", player->GetMitigationPercentage(player->GetLevel()) * 1000); // Mitigation % vs PvP
 		//packet->setDataByName("avoidance", 169); //Avoidance
 		packet->setDataByName("avoidance_base", 0); //Base Avoidance
 		packet->setDataByName("base_avoidance_pct", info_struct->base_avoidance_pct); //Base Avoidance pct
@@ -919,8 +926,7 @@ EQ2Packet* PlayerInfo::serialize(int16 version){
 				expireTimestamp = 0;
 			packet->setSubstructDataByName("maintained_effects", "expire_timestamp", expireTimestamp, i, 0);
 			packet->setSubstructDataByName("spell_effects", "spell_id", info_struct->spell_effects[i].spell_id, i, 0);
-			/*if(info_struct->spell_effects[i].spell_id > 0 && info_struct->spell_effects[i].spell_id < 0xFFFFFFFF)
-				packet->setSubstructDataByName("spell_effects", "unknown2", 514, i, 0);*/
+			packet->setSubstructDataByName("spell_effects", "cancellable", 3, i, 0);
 			packet->setSubstructDataByName("spell_effects", "total_time", info_struct->spell_effects[i].total_time, i, 0);
 			expireTimestamp = info_struct->spell_effects[i].expire_timestamp;
 			if(expireTimestamp == 0xFFFFFFFF)
@@ -1422,8 +1428,21 @@ vector<EQ2Packet*> Player::EquipItem(int16 index, int16 version, int8 slot_id){
 			else
 				slot = slot_id;
 			packets = UnequipItem(slot, item->details.inv_slot_id, item->details.slot_id, version);
+			// If item is a 2handed weapon and something is in the secondary, unequip the secondary
+			if (item->IsWeapon() && item->weapon_info->wield_type == ITEM_WIELD_TYPE_TWO_HAND && equipment_list.GetItem(EQ2_SECONDARY_SLOT) != 0) {
+				vector<EQ2Packet*> tmp_packets = UnequipItem(EQ2_SECONDARY_SLOT, -999, 0, version);
+				//packets.reserve(packets.size() + tmp_packets.size());
+				packets.insert(packets.end(), tmp_packets.begin(), tmp_packets.end());
+			}
 		}
-		else if(canEquip && slot < 255){
+		else if(canEquip && slot < 255) {
+			// If item is a 2handed weapon and something is in the secondary, unequip the secondary
+			if (item->IsWeapon() && item->weapon_info->wield_type == ITEM_WIELD_TYPE_TWO_HAND && equipment_list.GetItem(EQ2_SECONDARY_SLOT) != 0) {
+				vector<EQ2Packet*> tmp_packets = UnequipItem(EQ2_SECONDARY_SLOT, -999, 0, version);
+				//packets.reserve(packets.size() + tmp_packets.size());
+				packets.insert(packets.end(), tmp_packets.begin(), tmp_packets.end());
+			}
+
 			database.DeleteItem(GetCharacterID(), item, "NOT-EQUIPPED");
 
 			if (item->GetItemScript() && lua_interface)
@@ -1485,7 +1504,7 @@ EQ2Packet* Player::MoveInventoryItem(sint32 to_bag_id, int16 from_index, int8 ne
 		}
 		return item_list.serialize(this, version);
 	}
-	else if(result == 0){
+	else {
 		PacketStruct* packet = configReader.getStruct("WS_DisplayText", version);
 		if(packet){
 			packet->setDataByName("color", CHANNEL_COLOR_YELLOW);
@@ -1615,7 +1634,7 @@ EQ2Packet* Player::GetQuickbarPacket(int16 version){
 
 void Player::AddSpellBookEntry(int32 spell_id, int8 tier, sint32 slot, int32 type, int32 timer, bool save_needed){
 	SpellBookEntry* spell = new SpellBookEntry;
-	spell->status = 161;
+	spell->status = 0;
 	spell->slot = slot;
 	spell->spell_id = spell_id;
 	spell->type = type;
@@ -1716,130 +1735,151 @@ int16 Player::GetSpellPacketCount(){
 }
 
 void Player::LockAllSpells() {
-	vector<SpellBookEntry*>::iterator itr;
-
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		if ((*itr)->type != SPELL_BOOK_TYPE_TRADESKILL)
-			ModifySpellStatus((*itr), -66, false);
+	for (auto entry : spells) {
+		if (entry->type != SPELL_BOOK_TYPE_TRADESKILL) {
+			RemoveSpellStatus(entry, SPELL_STATUS_READY);
+		}
 	}
-
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
 }
 
-void Player::UnlockAllSpells(bool modify_recast) {
-	vector<SpellBookEntry*>::iterator itr;
-
+void Player::UnlockAllSpells(bool first_load) {
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		if ((*itr)->type != SPELL_BOOK_TYPE_TRADESKILL)
-			if (!GetSpellEffect((*itr)->spell_id, this) || master_spell_list.GetSpell((*itr)->spell_id, (*itr)->tier)->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE)
-				ModifySpellStatus((*itr), 66, modify_recast);
-	}
+	for (auto entry : spells) {
+		if (first_load) {
+			AddSpellStatus(entry, SPELL_STATUS_ENABLED);
+			AddSpellStatus(entry, SPELL_STATUS_LEARNED);
+		}
 
+		if (entry->type != SPELL_BOOK_TYPE_TRADESKILL && entry->recast_available < Timer::GetCurrentTime2()) {
+			if (!GetSpellEffect(entry->spell_id, this) || master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+				if (!HasLinkedSpellEffect(master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->linked_timer))
+					AddSpellStatus(entry, SPELL_STATUS_READY);
+			}
+		}
+	}
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
 }
 
 void Player::LockSpell(Spell* spell, int16 recast) {
-	vector<SpellBookEntry*>::iterator itr;
-	SpellBookEntry* spell2;
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		spell2 = *itr;
-		if (spell2->spell_id == spell->GetSpellID() /*|| (spell->GetSpellData()->linked_timer > 0 && spell->GetSpellData()->linked_timer == spell2->timer)*/)
-			ModifySpellStatus(spell2, -66, true, recast);
+	for (auto entry : spells) {
+		if (entry->spell_id == spell->GetSpellID()) {
+			RemoveSpellStatus(entry, SPELL_STATUS_READY);
+
+			if (!GetSpellEffect(spell->GetSpellID(), this) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+				if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer))
+					ModifyRecast(entry, recast);
+			}
+		}
 	}
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
 }
 
+bool Player::HasLinkedSpellEffect(int32 timer_id) {
+	if (!timer_id)
+		return false;
+
+	vector<Spell*> linkedSpells = GetSpellBookSpellsByTimer(timer_id, false);
+	for (const auto &spell : linkedSpells) {
+		if (GetSpellEffect(spell->GetSpellID(), this))
+			return true;
+	}
+
+	return false;
+}
+
 void Player::UnlockSpell(Spell* spell) {
-	vector<SpellBookEntry*>::iterator itr;
-	SpellBookEntry* spell2;
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		spell2 = *itr;
-		if (spell2->spell_id == spell->GetSpellID() /*|| (spell->GetSpellData()->linked_timer > 0 && spell->GetSpellData()->linked_timer == spell2->timer)*/)
-			ModifySpellStatus(spell2, 66);
+	for (auto entry : spells) {
+		if (entry->spell_id == spell->GetSpellID() && entry->recast_available < Timer::GetCurrentTime2()) {
+			if (!GetSpellEffect(spell->GetSpellID(), this) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+				if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer)) {
+					AddSpellStatus(entry, SPELL_STATUS_READY);
+					ModifyRecast(entry, 0);
+				}
+			}
+		}
 	}
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
 }
 
 void Player::LockTSSpells() {
-	vector<SpellBookEntry*>::iterator itr;
-
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		if ((*itr)->type == SPELL_BOOK_TYPE_TRADESKILL)
-			ModifySpellStatus(*itr, -66);
+	for (auto entry : spells) {
+		if (entry->type == SPELL_BOOK_TYPE_TRADESKILL) {
+			RemoveSpellStatus(entry, SPELL_STATUS_READY);
+		}
 	}
-
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
-	// Unlock all other types
+
 	UnlockAllSpells();
 }
 
 void Player::UnlockTSSpells() {
-	vector<SpellBookEntry*>::iterator itr;
-
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		if ((*itr)->type == SPELL_BOOK_TYPE_TRADESKILL)
-			ModifySpellStatus(*itr, 66);
+	for (auto entry : spells) {
+		if (entry->type == SPELL_BOOK_TYPE_TRADESKILL) {
+			AddSpellStatus(entry, SPELL_STATUS_READY);
+		}
 	}
-
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
-	// Lock all other types
+
 	LockAllSpells();
 }
 
 void Player::QueueSpell(Spell* spell) {
-	vector<SpellBookEntry*>::iterator itr;
-	SpellBookEntry* spell2;
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		spell2 = *itr;
-		if (spell2->spell_id == spell->GetSpellID())
-			ModifySpellStatus(spell2, 4, false);
+	for (auto entry : spells) {
+		if (entry->spell_id == spell->GetSpellID()) {
+			AddSpellStatus(entry, SPELL_STATUS_QUEUED);
+		}
 	}
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
 }
 
 void Player::UnQueueSpell(Spell* spell) {
-	vector<SpellBookEntry*>::iterator itr;
-	SpellBookEntry* spell2;
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
-	for (itr = spells.begin(); itr != spells.end(); itr++) {
-		spell2 = *itr;
-		if (spell2->spell_id == spell->GetSpellID())
-			ModifySpellStatus(spell2, -4, false);
+	for (auto entry : spells) {
+		if (entry->spell_id == spell->GetSpellID()) {
+			RemoveSpellStatus(entry, SPELL_STATUS_QUEUED);
+		}
 	}
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
 }
 
-vector<Spell*> Player::GetSpellBookSpellsByTimer(int32 timerID) {
+vector<Spell*> Player::GetSpellBookSpellsByTimer(int32 timerID, bool should_lock) {
 	vector<Spell*> ret;
 	vector<SpellBookEntry*>::iterator itr;
-	MSpellsBook.readlock(__FUNCTION__, __LINE__);
+
+	if (should_lock)
+		MSpellsBook.readlock(__FUNCTION__, __LINE__);
+
 	for (itr = spells.begin(); itr != spells.end(); itr++) {
 		if ((*itr)->timer == timerID)
 			ret.push_back(master_spell_list.GetSpell((*itr)->spell_id, (*itr)->tier));
 	}
-	MSpellsBook.releasereadlock(__FUNCTION__, __LINE__);
+
+	if (should_lock)
+		MSpellsBook.releasereadlock(__FUNCTION__, __LINE__);
+
 	return ret;
 }
 
-void Player::ModifySpellStatus(SpellBookEntry* spell, sint16 value, bool modify_recast, int16 recast) {
-	if (modify_recast) {
-		spell->recast = recast;
-		spell->recast_available = Timer::GetCurrentTime2()	+ (recast * 100);
-	}
+void Player::AddSpellStatus(SpellBookEntry* spell, sint16 value) {
+	if (!(spell->status & value))
+		spell->status += value;
+}
 
-	if (modify_recast || spell->recast_available <= Timer::GetCurrentTime2() || value == 4 || value == -4) {
-		int32 new_value = spell->status + value;
-		if (new_value < 161 || new_value > 165 && new_value < 227 || new_value > 231)
-			return;
-		spell->status = new_value;
-	}
+void Player::RemoveSpellStatus(SpellBookEntry* spell, sint16 value) {
+	if (spell->status & value)
+		spell->status -= value;
+}
+
+void Player::ModifyRecast(SpellBookEntry* spell, int16 recast) {
+	spell->recast = recast;
+	spell->recast_available = Timer::GetCurrentTime2()	+ (recast * 100);
 }
 
 void Player::SetSpellStatus(Spell* spell, int8 status){
@@ -2002,7 +2042,8 @@ EQ2Packet* Player::GetSpellBookUpdatePacket(int16 version){
 				spell = master_spell_list.GetSpell(spell_entry->spell_id, spell_entry->tier);
 				if(spell){
 					packet->setSubstructArrayDataByName("spells", "spell_id", spell_entry->spell_id, 0, ptr);
-					packet->setSubstructArrayDataByName("spells", "type", spell_entry->type, 0, ptr);
+					packet->setSubstructArrayDataByName("spells", "type", spell->GetSpellData()->spell_book_type, 0, ptr);
+					packet->setSubstructArrayDataByName("spells", "target_type", spell->GetSpellData()->target_type, 0, ptr);
 					packet->setSubstructArrayDataByName("spells", "recast_available", spell_entry->recast_available, 0, ptr);
 					packet->setSubstructArrayDataByName("spells", "recast_time", spell_entry->recast, 0, ptr);
 					packet->setSubstructArrayDataByName("spells", "status", spell_entry->status, 0, ptr);
@@ -2011,8 +2052,26 @@ EQ2Packet* Player::GetSpellBookUpdatePacket(int16 version){
 					packet->setSubstructArrayDataByName("spells", "icon2", spell->GetSpellIconHeroicOp(), 0, ptr);
 					packet->setSubstructArrayDataByName("spells", "unique_id", (spell_entry->tier+1)*-1, 0, ptr);
 					packet->setSubstructArrayDataByName("spells", "charges", 255, 0, ptr);
+					packet->setSubstructArrayDataByName("spells", "distance", 32 * spell->GetSpellData()->range, 0, ptr);
+					packet->setSubstructArrayDataByName("spells", "unknown4", 1600, 0, ptr);
 
-					// Beastlord and Channeler spell support
+					packet->setSubstructArrayDataByName("spells", "unknown2", 2, 0, ptr);
+
+					// unknown 3 = spell research stuff?
+					/*packet->setSubstructArrayDataByName("spells", "unknown3", 224, 0, ptr);
+					packet->setSubstructArrayDataByName("spells", "unknown3", 16, 1, ptr);
+
+					packet->setSubstructArrayDataByName("spells", "unknown3", 49, 4, ptr);
+					packet->setSubstructArrayDataByName("spells", "unknown3", 49, 6, ptr);
+
+					packet->setSubstructArrayDataByName("spells", "unknown3", 223, 8, ptr);
+					packet->setSubstructArrayDataByName("spells", "unknown3", 151, 9, ptr);
+					//packet->setSubstructArrayDataByName("spells", "unknown3", 1, 12, ptr);
+
+					packet->setSubstructArrayDataByName("spells", "unknown6", 2, 0, ptr); // 1 = ?, 2 = researchable
+					packet->setSubstructArrayDataByName("spells", "unknown6", 2, 1, ptr);*/
+
+					/*// Beastlord and Channeler spell support
 					if (spell->GetSpellData()->savage_bar == 1)
 						packet->setSubstructArrayDataByName("spells", "unknown6", 32, 0, ptr); // advantages
 					else if (spell->GetSpellData()->savage_bar == 2)
@@ -2022,7 +2081,7 @@ EQ2Packet* Player::GetSpellBookUpdatePacket(int16 version){
 						// Slot req for channelers
 						// bitmask for slots 1 = slot 1, 2 = slot 2, 4 = slot 3, 8 = slot 4, 16 = slot 5, 32 = slot 6, 64 = slot 7, 128 = slot 8
 						packet->setSubstructArrayDataByName("spells", "savage_bar_slot", spell->GetSpellData()->savage_bar_slot, 0, ptr);
-					}
+					}*/
 
 					ptr++;
 				}
@@ -2066,7 +2125,8 @@ PlayerInfo::PlayerInfo(Player* in_player){
 	LogWrite(MISC__TODO, 1, "TODO", "Fix info_struct.tradeskill_level = player->GetArtLevel();\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
 
 	for(int i=0;i<NUM_SPELL_EFFECTS;i++){
-		info_struct->spell_effects[i].spell_id = 0xFFFFFFFF;	
+		info_struct->spell_effects[i].spell_id = 0xFFFFFFFF;
+		info_struct->spell_effects[i].icon = 0xFFFF;
 	}
 	for(int i=0; i<NUM_MAINTAINED_EFFECTS; i++)
 	{
@@ -2159,7 +2219,8 @@ void Player::ClearEverything(){
 	player_spawn_index_map.clear();
 	player_spawn_id_map.clear();
 	player_spawn_reverse_id_map.clear();
-	player_spawn_index_map.clear();
+	HatedBy.clear();
+	ClearEncounterList();
 	map<int32, vector<int32>*>::iterator itr;
 	m_playerSpawnQuestsRequired.writelock(__FUNCTION__, __LINE__);
 	for (itr = player_spawn_quests_required.begin(); itr != player_spawn_quests_required.end(); itr++){
@@ -2225,7 +2286,7 @@ void Player::AddMaintainedSpell(LuaSpell* luaspell){
 		LogWrite(PLAYER__DEBUG, 5, "Player", "AddMaintainedSpell Spell ID: %u", spell->GetSpellData()->id);
 		effect->icon = spell->GetSpellData()->icon;
 		effect->icon_backdrop = spell->GetSpellData()->icon_backdrop;
-		effect->conc_used = spell->GetSpellData()->req_concentration / 256;
+		effect->conc_used = spell->GetSpellData()->req_concentration;
 		effect->total_time = spell->GetSpellDuration()/10;
 		effect->tier = spell->GetSpellData()->tier;
 		if (spell->GetSpellData()->duration_until_cancel)
@@ -2447,21 +2508,19 @@ void Player::PrepareIncomingMovementPacket(int32 len,uchar* data,int16 version)
 		if((activity == UPDATE_ACTIVITY_DROWNING || activity == UPDATE_ACTIVITY_DROWNING2) && GetZone() && !GetInvulnerable()) //drowning
 			GetZone()->AddDrowningVictim(this);
 
-		last_movement_activity = activity;
-	}
-
-	if (activity == UPDATE_ACTIVITY_JUMPING) {
-		if (y_speed < 0 && GetTempVisualState() != 290) {
+		if (activity == UPDATE_ACTIVITY_JUMPING) {
+			if (x_speed != 0 || z_speed != 0) {
+				SetTempVisualState(11758);
+			} else {
+				SetTempVisualState(11757);
+			}
+		} else if (activity == UPDATE_ACTIVITY_FALLING) {
 			SetTempVisualState(290);
-		} else if (GetTempVisualState() != 11758 && (x_speed != 0 || y_speed != 0)) {
-			SetTempVisualState(11758);
-		} else if (GetTempVisualState() != 11757) {
-			SetTempVisualState(11757);
+		} else if (GetTempVisualState() != -1) {
+			SetTempVisualState(-1);
 		}
-	} else if (activity == UPDATE_ACTIVITY_FALLING && GetTempVisualState() != 290) {
-		SetTempVisualState(290);
-	} else if (GetTempVisualState() != 0) {
-		SetTempVisualState(0);
+
+		last_movement_activity = activity;
 	}
 
 	//Player is riding a lift, update lift XYZ offsets and the lift's spawn pointer
@@ -2616,20 +2675,87 @@ PlayerSkillList* Player::GetSkills(){
 	return &skill_list;
 }
 
-void Player::InCombat(bool val, bool range) {
-	if (val)
-		GetInfoStruct()->flags |= (1 << (range?CF_RANGED_AUTO_ATTACK:CF_AUTO_ATTACK));
-	else
-		GetInfoStruct()->flags &= ~(1 << (range?CF_RANGED_AUTO_ATTACK:CF_AUTO_ATTACK));
+void Player::InCombat(bool val) {
+	lock_guard<mutex> lock(encounter_list_mutex);
+
+	if (!val && encounter_list.size() > 0) {
+		for (auto& kv : encounter_list) {
+			if (kv.second->has_attacked == true) {
+				val = true;
+				break;
+			}
+		}
+	}
 
 	in_combat = val;
+
 	if (in_combat) {
 		AddIconValue(64);
 	} else {
 		RemoveIconValue(64);
 	}
 
-	charsheet_changed = true;
+	SetCharSheetChanged(true);
+}
+
+void Player::AddToEncounterList(int32 spawn_id, int32 last_activity, bool has_attacked) {
+	encounter_list_mutex.lock();
+	if (encounter_list.count(spawn_id) > 0) {
+		HostileEntity* entity = encounter_list.at(spawn_id);
+
+		if (has_attacked) {
+			entity->last_activity = last_activity;
+
+			if (!entity->has_attacked)
+				entity->has_attacked = has_attacked;
+		}
+	} else {
+		HostileEntity* entity = new HostileEntity;
+		entity->last_activity = last_activity;
+		entity->has_attacked = has_attacked;
+
+		encounter_list.insert(pair<int32, HostileEntity*>(spawn_id, entity));
+	}
+	encounter_list_mutex.unlock();
+
+	if (has_attacked)
+		InCombat(true);
+}
+
+void Player::RemoveFromEncounterList(int32 spawn_id) {
+	encounter_list_mutex.lock();
+	if (encounter_list.count(spawn_id) > 0) {
+		free(encounter_list.at(spawn_id));
+		encounter_list.erase(spawn_id);
+	}
+	encounter_list_mutex.unlock();
+
+	if (encounter_list.size() == 0) {
+		InCombat(false);
+		SetRangeAttack(false);
+		SetMeleeAttack(false);
+	}
+}
+
+void Player::ClearEncounterList() {
+	lock_guard<mutex> lock(encounter_list_mutex);
+	encounter_list.clear();
+}
+
+void Player::CheckEncounterList() {
+	vector<int32> to_remove;
+
+	encounter_list_mutex.lock();
+	for (const auto& kv : encounter_list) {
+		Spawn* spawn = GetZone()->GetSpawnByID(kv.first);
+
+		if (!spawn || (spawn->IsPlayer() && Timer::GetCurrentTime2() >= (kv.second->last_activity + PVP_LOCK_DURATION * 1000)))
+			to_remove.push_back(kv.first);
+	}
+	encounter_list_mutex.unlock();
+
+	for (const auto& spawn : to_remove)
+		RemoveFromEncounterList(spawn);
 }
 
 void Player::SetCharSheetChanged(bool val){
@@ -2823,7 +2949,7 @@ float Player::CalculateTSXP(int8 level){
 		multiplier = 0;
 	else if(diff <= -6)
 		multiplier = 3.25;
-	else if(diff < 0)
+	else //if(diff < 0)
 		multiplier = 3.5;
 
 
@@ -3067,6 +3193,7 @@ void Player::CheckQuestsCraftUpdate(Item* item, int32 qty){
 		}
 	}
 	update_list->clear();
+	safe_delete(update_list);
 }
 
 void Player::CheckQuestsHarvestUpdate(Item* item, int32 qty){
@@ -3093,6 +3220,7 @@ void Player::CheckQuestsHarvestUpdate(Item* item, int32 qty){
 		}
 	}
 	update_list->clear();
+	safe_delete(update_list);
 }
 
 vector<Quest*>* Player::CheckQuestsSpellUpdate(Spell* spell) {
@@ -3704,7 +3832,7 @@ bool Player::ShouldSendSpawn(Spawn* spawn){
 	// Think invalid spawns are coming from the mutex list, if spawn is invalid return false.
 	try
 	{
-		if (spawn->IsPlayer() && CanAttackTarget((Player*)spawn) && ((Player*)spawn)->IsStealthed() && !stats[ITEM_STAT_SEESTEALTH])
+		if (spawn->IsPlayer() && IsHostile(static_cast<Player*>(spawn)) && static_cast<Player*>(spawn)->IsStealthed() && !stats[ITEM_STAT_SEESTEALTH])
 			return false;
 
 		if((WasSentSpawn(spawn->GetID()) == false || NeedsSpawnResent(spawn)) && (!spawn->IsPrivateSpawn() || spawn->AllowedAccess(this)))
@@ -3715,6 +3843,24 @@ bool Player::ShouldSendSpawn(Spawn* spawn){
 		LogWrite(SPAWN__ERROR, 0, "Spawn", "Invalid spawn passes to player->ShouldSendSpawn()");
 	}
 	return false;
+}
+
+struct SortSpellAlphabetically {
+	bool operator()(const SpellBookEntry* lhs, const SpellBookEntry* rhs) {
+		Spell* ls = master_spell_list.GetSpell(lhs->spell_id, lhs->tier);
+		Spell* rs = master_spell_list.GetSpell(rhs->spell_id, rhs->tier);
+
+		return strcmp(ls->GetName(), rs->GetName()) < 0;
+	}
+};
+
+void Player::SortSpellBook() {
+	MSpellsBook.writelock();
+	sort(spells.begin(), spells.end(), SortSpellAlphabetically());
+	for (int i = 0; i < spells.size(); i++) {
+		spells[i]->slot = i;
+	}
+	MSpellsBook.releasewritelock();
 }
 
 int8 Player::GetArrowColor(int8 spawn_level){
@@ -3736,7 +3882,7 @@ int8 Player::GetArrowColor(int8 spawn_level){
 		color = ARROW_COLOR_GRAY;
 	else if(diff <= -6)
 		color = ARROW_COLOR_GREEN;
-	else if(diff < 0)
+	else //if(diff < 0)
 		color = ARROW_COLOR_BLUE;
 	return color;
 }
@@ -3760,9 +3906,53 @@ int8 Player::GetTSArrowColor(int8 level){
 		color = ARROW_COLOR_GRAY;
 	else if(diff <= -6)
 		color = ARROW_COLOR_GREEN;
-	else if(diff < 0)
+	else //if(diff < 0)
 		color = ARROW_COLOR_BLUE;
 	return color;
+}
+
+void Player::AddActivityStatus(shared_ptr<ActivityStatus> status) {
+	if (!HasActivityStatus(status->status)) {
+		activity_statuses.push_back(status);
+
+		changed = true;
+		info_changed = true;
+		GetZone()->AddChangedSpawn(this);
+	}
+}
+
+bool Player::HasActivityStatus(int16 type) {
+	for (auto const& status : activity_statuses) {
+		if (status->status == type)
+			return true;
+	}
+
+	return false;
+}
+
+void Player::CheckActivityStatuses() {
+	auto status = begin(activity_statuses);
+
+	while (status != end(activity_statuses)) {
+		if (Timer::GetCurrentTime2() > status->get()->end_time) {
+			if (status->get()->status == ACTIVITY_STATUS_IMMUNITY_REMAINING)
+				SetPVPImmune(false);
+
+			status = activity_statuses.erase(status);
+
+			changed = true;
+			info_changed = true;
+			GetZone()->AddChangedSpawn(this);
+		} else {
+			++status;
+		}
+	}
+}
+
+void Player::SetPVPImmune(bool val) {
+	pvp_immune = val;
+	changed = true;
+	vis_changed = true;
 }
 
 void Player::AddCoins(int64 val){
@@ -3895,14 +4085,12 @@ void Player::UpdatePlayerStatistic(int32 stat_id, sint32 stat_value, bool overwr
 }
 
 void Player::WritePlayerStatistics() {
-	if (this) {
-		map<int32, Statistic*>::iterator stat_itr;
-		for (stat_itr = statistics.begin(); stat_itr != statistics.end(); stat_itr++) {
-			Statistic* stat = stat_itr->second;
-			if (stat->save_needed) {
-				stat->save_needed = false;
-				database.WritePlayerStatistic(this, stat);
-			}
+	map<int32, Statistic*>::iterator stat_itr;
+	for (stat_itr = statistics.begin(); stat_itr != statistics.end(); stat_itr++) {
+		Statistic* stat = stat_itr->second;
+		if (stat->save_needed) {
+			stat->save_needed = false;
+			database.WritePlayerStatistic(this, stat);
 		}
 	}
 }
@@ -3928,12 +4116,13 @@ void Player::SetGroup(PlayerGroup* new_group){
 	return group;
 }*/
 
-bool Player::IsGroupMember(Player* player) {
+bool Player::IsGroupMember(Entity* player) {
 	bool ret = false;
 	if (GetGroupMemberInfo() && player) {
-		world.GetGroupManager()->GroupLock(__FUNCTION__, __LINE__);
+		//world.GetGroupManager()->GroupLock(__FUNCTION__, __LINE__);
+		ret = world.GetGroupManager()->IsInGroup(GetGroupMemberInfo()->group_id, player);
 
-		deque<GroupMemberInfo*>::iterator itr;
+		/*deque<GroupMemberInfo*>::iterator itr;
 		deque<GroupMemberInfo*>* members = world.GetGroupManager()->GetGroupMembers(GetGroupMemberInfo()->group_id);
 		for (itr = members->begin(); itr != members->end(); itr++) {
 			GroupMemberInfo* gmi = *itr;
@@ -3943,14 +4132,10 @@ bool Player::IsGroupMember(Player* player) {
 			}
 		}
 
-		world.GetGroupManager()->ReleaseGroupLock(__FUNCTION__, __LINE__);
+		world.GetGroupManager()->ReleaseGroupLock(__FUNCTION__, __LINE__);*/
 	}
 	return ret;
 }
-
-
-
-
 
 void Player::SetGroupInformation(PacketStruct* packet){
 	int8 det_count = 0;
@@ -4156,10 +4341,28 @@ Skill* Player::GetSkillByName(const char* name, bool check_update){
 
 void Player::SetRangeAttack(bool val){
 	range_attack = val;
+
+	if (val)
+		set_character_flag(CF_RANGED_AUTO_ATTACK);
+	else
+		reset_character_flag(CF_RANGED_AUTO_ATTACK);
 }
 
-bool Player::GetRangeAttack(){
+bool Player::GetRangeAttack() {
 	return range_attack;
+}
+
+void Player::SetMeleeAttack(bool val) {
+	melee_attack = val;
+
+	if (val)
+		set_character_flag(CF_AUTO_ATTACK);
+	else
+		reset_character_flag(CF_AUTO_ATTACK);
+}
+
+bool Player::GetMeleeAttack() {
+	return melee_attack;
 }
 
 bool Player::AddMail(Mail* mail) {

@@ -43,6 +43,7 @@ along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 #include "Titles.h"
 #include "Languages.h"
 #include "Traits/Traits.h"
+#include "SpellProcess.h"
 
 extern Classes classes;
 extern Commands commands;
@@ -157,6 +158,47 @@ void WorldDatabase::SaveBuyBack(int32 char_id, int32 item_id, int8 quantity, int
 	query.RunQuery2(Q_INSERT, insert.c_str(), char_id, item_id, quantity, price);
 }
 
+void WorldDatabase::LoadCharacterActiveSpells(Player* player) {
+	Query query;
+
+	SpellProcess* spell_process = player->GetZone()->GetSpellProcess();
+	if (!spell_process) return;
+
+	MYSQL_RES* result = query.RunQuery2(Q_SELECT, "SELECT character_id, target_character_id, spell_id, spell_tier FROM character_active_spells WHERE character_id = %u OR target_character_id = %u", player->GetCharacterID(), player->GetCharacterID());
+	MYSQL_ROW row;
+
+	while (result && (row = mysql_fetch_row(result))) {
+		int caster_id = atoul(row[0]);
+		int target_id = atoul(row[1]);
+		int spell_id = atoul(row[2]);
+		int spell_tier = atoul(row[3]);
+
+		Spell* spell = master_spell_list.GetSpell(spell_id, spell_tier);
+		LuaSpell* lua_spell = nullptr;
+
+		if (spell && lua_interface) {
+			lua_spell = lua_interface->GetSpell(spell->GetSpellData()->lua_script.c_str());
+		}
+
+		if (lua_spell) {
+			Player* caster = player->GetZone()->GetPlayerByID(caster_id);
+			Player* target = player->GetZone()->GetPlayerByID(target_id);
+
+			if (!target)
+				continue;
+
+			lua_spell->caster = caster;
+			lua_spell->initial_target = target->GetID();
+			lua_spell->spell = spell;
+
+			spell_process->GetSpellTargets(lua_spell);
+			spell_process->CastProcessedSpell(lua_spell, true);
+
+			caster->GetZone()->GetSpellProcess()->CheckRecast(spell, caster, spell->GetModifiedRecast(caster));
+		}
+	}
+}
+
 int32 WorldDatabase::LoadCharacterSpells(int32 char_id, Player* player)
 {
 	LogWrite(SPELL__DEBUG, 0, "Spells", "Loading Character Spells for player %s...", player->GetName());
@@ -186,6 +228,43 @@ int32 WorldDatabase::LoadCharacterSpells(int32 char_id, Player* player)
 	}
 
 	return count;
+}
+
+void WorldDatabase::SavePlayerActiveSpells(Client* client) {
+	if (!client) return;
+
+	Query query;
+	SpellEffects* se = client->GetPlayer()->GetSpellEffects();
+
+	DeleteCharacterActiveSpells(client);
+
+	for (int i = 0; i < NUM_SPELL_EFFECTS; i++) {
+		LuaSpell* lua_spell = se[i].spell;
+
+		if (se[i].spell_id != 0xFFFFFFFF && lua_spell->spell->GetSpellData()->friendly_spell && (lua_spell->timer.GetRemainingTime() > 0 || lua_spell->spell->GetSpellData()->duration_until_cancel)) {
+			Spawn* caster = lua_spell->caster;
+			Spawn* target = client->GetCurrentZone()->GetSpawnByID(lua_spell->initial_target);
+
+			if (caster == client->GetCurrentZone()->unknown_spawn)
+				caster = target;
+			
+			if (caster->IsPlayer() && target->IsPlayer()) {
+				query.RunQuery2(Q_INSERT, "INSERT INTO character_active_spells (character_id, target_character_id, spell_id, spell_tier) VALUES (%u, %u, %u, %u) ON DUPLICATE KEY UPDATE character_id = character_id", ((Player*)caster)->GetCharacterID(), ((Player*)target)->GetCharacterID(), lua_spell->spell->GetSpellID(), lua_spell->spell->GetSpellTier());
+			}
+		}
+	}
+}
+
+void WorldDatabase::DeleteCharacterActiveSpells(Client* client, bool delete_all) {
+	if (!client) return;
+
+	Query query;
+
+	if (delete_all) {
+		query.RunQuery2(Q_DELETE, "DELETE FROM character_active_spells WHERE character_id = %u OR target_character_id = %u", client->GetPlayer()->GetCharacterID(), client->GetPlayer()->GetCharacterID());
+	} else {
+		query.RunQuery2(Q_DELETE, "DELETE FROM character_active_spells WHERE character_id = %u AND target_character_id = %u", client->GetPlayer()->GetCharacterID(), client->GetPlayer()->GetCharacterID());
+	}
 }
 
 void WorldDatabase::SavePlayerSpells(Client* client)
@@ -513,100 +592,102 @@ int32 WorldDatabase::LoadNPCEquipment(ZoneServer* zone){
 
 int8 WorldDatabase::GetAppearanceType(string type){
 	int8 ret = 255;
-	if(type == "soga_hair_face_highlight_color")
+	if (type == "soga_hair_face_highlight_color")
 		ret = APPEARANCE_SOGA_HFHC;
-	else if(type == "soga_hair_type_highlight_color")
+	else if (type == "soga_hair_type_highlight_color")
 		ret = APPEARANCE_SOGA_HTHC;
-	else if(type == "soga_hair_face_color")
+	else if (type == "soga_hair_face_color")
 		ret = APPEARANCE_SOGA_HFC;
-	else if(type == "soga_hair_type_color")
+	else if (type == "soga_hair_type_color")
 		ret = APPEARANCE_SOGA_HTC;
-	else if(type == "soga_hair_highlight")
+	else if (type == "soga_hair_highlight")
 		ret = APPEARANCE_SOGA_HH;
-	else if(type == "soga_hair_color1")
+	else if (type == "soga_hair_color1")
 		ret = APPEARANCE_SOGA_HC1;
-	else if(type == "soga_hair_color2")
+	else if (type == "soga_hair_color2")
 		ret = APPEARANCE_SOGA_HC2;
-	else if(type == "hair_type_color")
+	else if (type == "hair_type_color")
 		ret = APPEARANCE_HTC;
-	else if(type == "soga_skin_color")
+	else if (type == "soga_skin_color")
 		ret = APPEARANCE_SOGA_SC;
-	else if(type == "soga_eye_color")
+	else if (type == "soga_eye_color")
 		ret = APPEARANCE_SOGA_EC;
-	else if(type == "hair_type_highlight_color")
+	else if (type == "hair_type_highlight_color")
 		ret = APPEARANCE_HTHC;
-	else if(type == "hair_face_highlight_color")
+	else if (type == "hair_face_highlight_color")
 		ret = APPEARANCE_HFHC;
-	else if(type == "hair_face_color")
+	else if (type == "hair_face_color")
 		ret = APPEARANCE_HFC;
-	else if(type == "hair_highlight")
-		ret = APPEARANCE_HH;		
-	else if(type == "hair_color1")
+	else if (type == "hair_highlight")
+		ret = APPEARANCE_HH;
+	else if (type == "hair_color1")
 		ret = APPEARANCE_HC1;
-	else if(type == "wing_color1")
+	else if (type == "wing_color1")
 		ret = APPEARANCE_WC1;
-	else if(type == "hair_color2")
+	else if (type == "hair_color2")
 		ret = APPEARANCE_HC2;
-	else if(type == "wing_color2")
+	else if (type == "wing_color2")
 		ret = APPEARANCE_WC2;
-	else if(type == "skin_color")
+	else if (type == "skin_color")
 		ret = APPEARANCE_SC;
-	else if(type == "eye_color")
+	else if (type == "eye_color")
 		ret = APPEARANCE_EC;
-	else if(type == "soga_eye_brow_type")
+	else if (type == "soga_eye_brow_type")
 		ret = APPEARANCE_SOGA_EBT;
-	else if(type == "soga_cheek_type")
+	else if (type == "soga_cheek_type")
 		ret = APPEARANCE_SOGA_CHEEKT;
-	else if(type == "soga_nose_type")
+	else if (type == "soga_nose_type")
 		ret = APPEARANCE_SOGA_NT;
-	else if(type == "soga_chin_type")
+	else if (type == "soga_chin_type")
 		ret = APPEARANCE_SOGA_CHINT;
-	else if(type == "soga_lip_type")
+	else if (type == "soga_lip_type")
 		ret = APPEARANCE_SOGA_LT;
-	else if(type == "eye_brow_type")
+	else if (type == "eye_brow_type")
 		ret = APPEARANCE_EBT;
-	else if(type == "soga_ear_type")
+	else if (type == "soga_ear_type")
 		ret = APPEARANCE_SOGA_EART;
-	else if(type == "soga_eye_type")
+	else if (type == "soga_eye_type")
 		ret = APPEARANCE_SOGA_EYET;
-	else if(type == "cheek_type")
+	else if (type == "cheek_type")
 		ret = APPEARANCE_CHEEKT;
-	else if(type == "nose_type")
+	else if (type == "nose_type")
 		ret = APPEARANCE_NT;
-	else if(type == "chin_type")
+	else if (type == "chin_type")
 		ret = APPEARANCE_CHINT;
-	else if(type == "ear_type")
+	else if (type == "ear_type")
 		ret = APPEARANCE_EART;
-	else if(type == "eye_type")
+	else if (type == "eye_type")
 		ret = APPEARANCE_EYET;
-	else if(type == "lip_type")
+	else if (type == "lip_type")
 		ret = APPEARANCE_LT;
-	else if(type == "shirt_color")
+	else if (type == "shirt_color")
 		ret = APPEARANCE_SHIRT;
-	else if(type == "unknown_chest_color")
-			ret = APPEARANCE_UCC;
-	else if(type == "pants_color")
-			ret = APPEARANCE_PANTS;
-	else if(type == "unknown_legs_color")
-			ret = APPEARANCE_ULC;
-	else if(type == "unknown9")
-			ret = APPEARANCE_U9;
-	else if(type == "body_size")
-			ret = APPEARANCE_BODY_SIZE;
-	else if(type == "soga_wing_color1")
-			ret = APPEARANCE_SOGA_WC1;
-	else if(type == "soga_wing_color2")
-			ret = APPEARANCE_SOGA_WC2;
-	else if(type == "soga_shirt_color")
-			ret = APPEARANCE_SOGA_SHIRT;
-	else if(type == "soga_unknown_chest_color")
-			ret = APPEARANCE_SOGA_UCC;
-	else if(type == "soga_pants_color")
-			ret = APPEARANCE_SOGA_PANTS;
-	else if(type == "soga_unknown_legs_color")
-			ret = APPEARANCE_SOGA_ULC;
-	else if(type == "soga_unknown13")
-			ret = APPEARANCE_SOGA_U13;
+	else if (type == "unknown_chest_color")
+		ret = APPEARANCE_UCC;
+	else if (type == "pants_color")
+		ret = APPEARANCE_PANTS;
+	else if (type == "unknown_legs_color")
+		ret = APPEARANCE_ULC;
+	else if (type == "unknown9")
+		ret = APPEARANCE_U9;
+	else if (type == "body_size")
+		ret = APPEARANCE_BODY_SIZE;
+	else if (type == "soga_wing_color1")
+		ret = APPEARANCE_SOGA_WC1;
+	else if (type == "soga_wing_color2")
+		ret = APPEARANCE_SOGA_WC2;
+	else if (type == "soga_shirt_color")
+		ret = APPEARANCE_SOGA_SHIRT;
+	else if (type == "soga_unknown_chest_color")
+		ret = APPEARANCE_SOGA_UCC;
+	else if (type == "soga_pants_color")
+		ret = APPEARANCE_SOGA_PANTS;
+	else if (type == "soga_unknown_legs_color")
+		ret = APPEARANCE_SOGA_ULC;
+	else if (type == "soga_unknown13")
+		ret = APPEARANCE_SOGA_U13;
+	else if (type == "body_age")
+		ret = APPEARANCE_BODY_AGE;
 	return ret;
 }
 
@@ -849,6 +930,10 @@ int32 WorldDatabase::LoadAppearances(ZoneServer* zone, Client* client){
 				break;
 			}
 			case APPEARANCE_SOGA_U13:{
+				break;
+			}
+			case APPEARANCE_BODY_AGE: {
+				entity->features.body_age = color.red;
 				break;
 			}
 		}
@@ -1132,9 +1217,9 @@ void WorldDatabase::LoadWidgets(ZoneServer* zone){
 		widget->SetOpenHeading(atof(row[16]));
 		widget->SetOpenY(atof(row[17]));
 		widget->SetActionSpawnID(atoul(row[18]));
-		if(row[18] && strlen(row[19]) > 5)
+		if(row[19] && strlen(row[19]) > 5)
 			widget->SetOpenSound(row[19]);
-		if(row[19] && strlen(row[20]) > 5)
+		if(row[20] && strlen(row[20]) > 5)
 			widget->SetCloseSound(row[20]);
 		widget->SetOpenDuration(atoi(row[21]));
 		widget->SetClosedHeading(atof(row[22]));
@@ -1414,10 +1499,6 @@ bool WorldDatabase::LoadCharacterStats(int32 id, int32 account_id, Client* clien
 		LogWrite(PLAYER__ERROR, 0, "Player", "Error loading character_details for '%s' (char_id: %u)", client->GetPlayer()->GetName(), id);
 		return false;
 	}
-
-	// should not be here...
-	LogWrite(PLAYER__ERROR, 0, "Player", "Error loading character_details for '%s' (char_id: %u)", client->GetPlayer()->GetName(), id);
-	return false;
 }
 
 bool WorldDatabase::loadCharacter(const char* ch_name, int32 account_id, Client* client){
@@ -2017,6 +2098,20 @@ int8 WorldDatabase::CheckNameFilter(const char* name) {
 	}
 	else
 		LogWrite(WORLD__ERROR, 0, "World", "Error in CheckNameFilter (name exist check) (Name query '%s': %s", query.GetQuery(), query.GetError());
+
+	Query query3;
+	LogWrite(WORLD__DEBUG, 0, "World", "Name check on: %s (Bots table)", name);
+	MYSQL_RES* result3 = query3.RunQuery2(Q_SELECT, "SELECT count(*) FROM bots WHERE name='%s'", name);
+	if (result3 && mysql_num_rows(result3) > 0) {
+		MYSQL_ROW row;
+		row = mysql_fetch_row(result3);
+		if (row[0] != 0 && atoi(row[0]) > 0)
+			return NAMETAKEN_REPLY;
+	}
+	else
+		LogWrite(WORLD__ERROR, 0, "World", "Error in CheckNameFilter (name exist check, bot table) (Name query '%s': %s", query3.GetQuery(), query3.GetError());
+
+
 
 	Query query2;
 	MYSQL_RES* result2 = query2.RunQuery2(Q_SELECT, "SELECT count(*) FROM name_filter WHERE '%s' like name",name);
@@ -2918,12 +3013,14 @@ bool WorldDatabase::SaveSpawnInfo(Spawn* spawn){
 	string suffix = getSafeEscapeString(spawn->GetSuffixTitle());
 	string prefix = getSafeEscapeString(spawn->GetPrefixTitle());
 	string last_name = getSafeEscapeString(spawn->GetLastName());
+	string sub_title = getSafeEscapeString(spawn->GetSubTitle());
+
 	if(spawn->GetDatabaseID() == 0){
 
 		int32 new_spawn_id = GetNextSpawnIDInZone(spawn->GetZone()->GetZoneID());
 
-		query.RunQuery2(Q_INSERT, "insert into spawn (id, name, race, model_type, size, targetable, show_name, command_primary, command_secondary, visual_state, attackable, show_level, show_command_icon, display_hand_icon, faction_id, collision_radius, hp, power, prefix, suffix, last_name) values(%u, '%s', %i, %i, %i, %i, %i, %u, %u, %i, %i, %i, %i, %i, %u, %i, %u, %u, '%s', '%s', '%s')",
-			new_spawn_id, name.c_str(), spawn->GetRace(), spawn->GetModelType(), spawn->GetSize(), spawn->appearance.targetable, spawn->appearance.display_name, spawn->GetPrimaryCommandListID(), spawn->GetSecondaryCommandListID(), spawn->GetVisualState(), spawn->appearance.attackable, spawn->appearance.show_level, spawn->appearance.show_command_icon, spawn->appearance.display_hand_icon, 0, spawn->appearance.pos.collision_radius, spawn->GetTotalHP(), spawn->GetTotalPower(), prefix.c_str(), suffix.c_str(), last_name.c_str());
+		query.RunQuery2(Q_INSERT, "insert into spawn (id, name, race, model_type, size, targetable, show_name, command_primary, command_secondary, visual_state, attackable, show_level, show_command_icon, display_hand_icon, faction_id, collision_radius, hp, power, prefix, suffix, last_name, sub_title) values(%u, '%s', %i, %i, %i, %i, %i, %u, %u, %i, %i, %i, %i, %i, %u, %i, %u, %u, '%s', '%s', '%s', '%s')",
+			new_spawn_id, name.c_str(), spawn->GetRace(), spawn->GetModelType(), spawn->GetSize(), spawn->appearance.targetable, spawn->appearance.display_name, spawn->GetPrimaryCommandListID(), spawn->GetSecondaryCommandListID(), spawn->GetVisualState(), spawn->appearance.attackable, spawn->appearance.show_level, spawn->appearance.show_command_icon, spawn->appearance.display_hand_icon, 0, spawn->appearance.pos.collision_radius, spawn->GetTotalHP(), spawn->GetTotalPower(), prefix.c_str(), suffix.c_str(), last_name.c_str(), sub_title.c_str());
 
 		if( new_spawn_id > 0 )
 			spawn->SetDatabaseID(new_spawn_id); // use the new zone_id range
@@ -2953,14 +3050,14 @@ bool WorldDatabase::SaveSpawnInfo(Spawn* spawn){
 	}
 	else{
 		if(spawn->IsNPC()){
-			query.RunQuery2(Q_UPDATE, "update spawn_npcs, spawn set name='%s', min_level=%i, max_level=%i, enc_level=%i, race=%i, model_type=%i, class_=%i, gender=%i, show_name=%i, attackable=%i, show_level=%i, targetable=%i, show_command_icon=%i, display_hand_icon=%i, hair_type_id=%i, facial_hair_type_id=%i, wing_type_id=%i, chest_type_id=%i, legs_type_id=%i, soga_hair_type_id=%i, soga_facial_hair_type_id=%i, soga_model_type=%i, size=%i, hp=%u, heroic_flag=%i, power=%u, collision_radius=%i, command_primary=%u, command_secondary=%u, visual_state=%i, action_state=%i, mood_state=%i, initial_state=%i, activity_status=%i, alignment=%i, faction_id=%u, hide_hood=%i, emote_state=%i, suffix ='%s', prefix='%s', last_name='%s' where spawn_npcs.spawn_id = spawn.id and spawn.id = %u",
+			query.RunQuery2(Q_UPDATE, "update spawn_npcs, spawn set name='%s', min_level=%i, max_level=%i, enc_level=%i, race=%i, model_type=%i, class_=%i, gender=%i, show_name=%i, attackable=%i, show_level=%i, targetable=%i, show_command_icon=%i, display_hand_icon=%i, hair_type_id=%i, facial_hair_type_id=%i, wing_type_id=%i, chest_type_id=%i, legs_type_id=%i, soga_hair_type_id=%i, soga_facial_hair_type_id=%i, soga_model_type=%i, size=%i, hp=%u, heroic_flag=%i, power=%u, collision_radius=%i, command_primary=%u, command_secondary=%u, visual_state=%i, action_state=%i, mood_state=%i, initial_state=%i, activity_status=%i, alignment=%i, faction_id=%u, hide_hood=%i, emote_state=%i, suffix ='%s', prefix='%s', last_name='%s', sub_title = '%s' where spawn_npcs.spawn_id = spawn.id and spawn.id = %u",
 				name.c_str(), spawn->GetLevel(), spawn->GetLevel(), spawn->appearance.encounter_level, spawn->GetRace(), spawn->GetModelType(),
 				spawn->GetAdventureClass(), spawn->GetGender(), spawn->appearance.display_name, spawn->appearance.attackable, spawn->appearance.show_level, spawn->appearance.targetable, spawn->appearance.show_command_icon, spawn->appearance.display_hand_icon, ((NPC*)spawn)->features.hair_type, 
 				((NPC*)spawn)->features.hair_face_type, ((NPC*)spawn)->features.wing_type, ((NPC*)spawn)->features.chest_type, ((NPC*)spawn)->features.legs_type, ((NPC*)spawn)->features.soga_hair_type, ((NPC*)spawn)->features.soga_hair_face_type, spawn->appearance.soga_model_type, spawn->GetSize(), 
 				spawn->GetTotalHP(), spawn->appearance.heroic_flag, spawn->GetTotalPower(), spawn->GetCollisionRadius(), spawn->GetPrimaryCommandListID(), 
 				spawn->GetSecondaryCommandListID(), spawn->GetVisualState(), spawn->GetActionState(), spawn->GetMoodState(), spawn->GetInitialState(), 
 				spawn->GetActivityStatus(), ((NPC*)spawn)->GetAlignment(), spawn->GetFactionID(), spawn->appearance.hide_hood, spawn->appearance.emote_state, 
-				suffix.c_str(), prefix.c_str(), last_name.c_str(), spawn->GetDatabaseID());
+				suffix.c_str(), prefix.c_str(), last_name.c_str(), sub_title.c_str(), spawn->GetDatabaseID());
 		}
 		else if(spawn->IsObject()){
 			query.RunQuery2(Q_UPDATE, "update spawn_objects, spawn set name='%s', model_type=%i, show_name=%i, targetable=%i, size=%i, command_primary=%u, command_secondary=%u, visual_state=%i, attackable=%i, show_level=%i, show_command_icon=%i, display_hand_icon=%i, collision_radius=%i, hp = %u, power = %u, device_id = %i where spawn_objects.spawn_id = spawn.id and spawn.id = %u",
@@ -3001,19 +3098,21 @@ bool WorldDatabase::SaveCombinedSpawnLocation(ZoneServer* zone, Spawn* in_spawn,
 		}
 		for(itr = spawns->begin();itr!=spawns->end();itr++){
 			spawn = *itr;
-			RemoveSpawnFromSpawnLocation(spawn);
-			spawn->SetSpawnLocationID(spawn_location_id);
-			bool add = true;
-			for(freq_itr = database_spawns.begin(); freq_itr != database_spawns.end(); freq_itr++){
-				if(spawn && spawn->GetDatabaseID() == freq_itr->first->GetDatabaseID()){
-					freq_itr->second++;
-					total++;
-					add = false;
+			if (spawn) {
+				RemoveSpawnFromSpawnLocation(spawn);
+				spawn->SetSpawnLocationID(spawn_location_id);
+				bool add = true;
+				for (freq_itr = database_spawns.begin(); freq_itr != database_spawns.end(); freq_itr++) {
+					if (spawn->GetDatabaseID() == freq_itr->first->GetDatabaseID()) {
+						freq_itr->second++;
+						total++;
+						add = false;
+					}
 				}
-			}
-			if(add){
-				database_spawns[spawn] = 1;
-				total++;
+				if (add) {
+					database_spawns[spawn] = 1;
+					total++;
+				}
 			}
 		}
 		for(freq_itr = database_spawns.begin(); freq_itr != database_spawns.end(); freq_itr++){
@@ -4053,7 +4152,7 @@ void WorldDatabase::LoadSpells()
 	int32 total = 0;
 	map<int32, vector<LevelArray*> >* level_data = LoadSpellClasses();
 
-	if( !database_new.Select(&result, "SELECT s.`id`, `name`, `description`, `type`, `class_skill`, `mastery_skill`, `tier`, `hp_req`, `power_req`, `cast_time`, `recast`, `radius`, `max_aoe_targets`, `req_concentration`, `range`, `duration1`, `duration2`, `resistibility`, `hp_upkeep`, `power_upkeep`, `duration_until_cancel`, `target_type`, `recovery`, `power_req_percent`, `hp_req_percent`, `icon`, `icon_heroic_op`, `icon_backdrop`, `success_message`, `fade_message`, `cast_type`, `lua_script`, `call_frequency`, `interruptable`, `spell_visual`, `effect_message`, `min_range`, `can_effect_raid`, `affect_only_group_members`, `hit_bonus`, `display_spell_tier`, `friendly_spell`, `group_spell`, `spell_book_type`, s.is_active, savagery_req, savagery_req_percent, savagery_upkeep, dissonance_req, dissonance_req_percent, dissonance_upkeep, linked_timer_id, det_type, incurable, control_effect_type, cast_while_moving, casting_flags, persist_through_death, not_maintained, savage_bar, savage_bar_slot, soe_spell_crc "
+	if( !database_new.Select(&result, "SELECT s.`id`, `name`, `description`, `type`, `class_skill`, `mastery_skill`, `tier`, `hp_req`, `power_req`, `cast_time`, `recast`, `radius`, `max_aoe_targets`, `req_concentration`, `range`, `duration1`, `duration2`, `resistibility`, `hp_upkeep`, `power_upkeep`, `duration_until_cancel`, `target_type`, `recovery`, `power_req_percent`, `hp_req_percent`, `icon`, `icon_heroic_op`, `icon_backdrop`, `success_message`, `fade_message`, `cast_type`, `lua_script`, `call_frequency`, `interruptable`, `spell_visual`, `effect_message`, `min_range`, `can_effect_raid`, `affect_only_group_members`, `hit_bonus`, `display_spell_tier`, `friendly_spell`, `group_spell`, `spell_book_type`, spell_type+0, s.is_active, savagery_req, savagery_req_percent, savagery_upkeep, dissonance_req, dissonance_req_percent, dissonance_upkeep, linked_timer_id, det_type, incurable, control_effect_type, cast_while_moving, casting_flags, persist_through_death, not_maintained, savage_bar, savage_bar_slot, soe_spell_crc "
 									"FROM spells s, spell_tiers st "
 									"WHERE s.id = st.spell_id AND s.is_active = 1 "
 									"ORDER BY s.`id`, `tier`") )
@@ -4090,6 +4189,8 @@ void WorldDatabase::LoadSpells()
 			data->casting_flags             = result.GetInt32Str("casting_flags");
 			data->savage_bar				= result.GetInt8Str("savage_bar");
 			data->savage_bar_slot			= result.GetInt8Str("savage_bar_slot");
+			data->spell_type				= result.IsNullStr("spell_type+0") ? 0 : result.GetInt8Str("spell_type+0");
+
 
 			/* Toggles */
 			data->interruptable				= ( result.GetInt8Str("interruptable") == 1);
@@ -4178,7 +4279,7 @@ void WorldDatabase::LoadSpells()
 			if( lua_script.length() > 0 )
 				LogWrite(SPELL__DEBUG, 5, "Spells", "\t%i. %s (Tier: %i) - '%s'", spell_id, spell_name.c_str(), data->tier, lua_script.c_str()); 		
 			else if(data->is_active)
-				LogWrite(SPELL__WARNING, 0, "Spells", "\tSpell %s (%u, Tier: %i) set 'Active', but missing LUAScript", spell_name.c_str(), spell_id, data->tier);
+				LogWrite(SPELL__WARNING, 1, "Spells", "\tSpell %s (%u, Tier: %i) set 'Active', but missing LUAScript", spell_name.c_str(), spell_id, data->tier);
 
 		} // end while
 	} // end else
@@ -4250,7 +4351,7 @@ void WorldDatabase::LoadSpellEffects() {
 	int32 total = 0;
 	MYSQL_RES *result = query.RunQuery2(Q_SELECT, "SELECT `spell_id`,`tier`,`percentage`,`bullet`,`description` "
 												  "FROM `spell_display_effects` "
-												  "ORDER BY `spell_id`,`id` ASC");
+												  "ORDER BY `spell_id`,`index` ASC");
 
 	while (result && (row = mysql_fetch_row(result))) {
 		if ((spell = master_spell_list.GetSpell(atoul(row[0]), atoi(row[1]))) && row[4]) {
@@ -5372,6 +5473,38 @@ bool WorldDatabase::LocationExists(int32 location_id) {
 			ret = true;
 	}
 	return ret;
+}
+
+bool WorldDatabase::GetTableVersions(vector<TableVersion*>* table_versions) {
+	DatabaseResult result;
+	TableVersion *table_version;
+	bool success;
+
+	//don't treat 1146 (table not found) as an error since the patch server will create it
+	database_new.SetIgnoredErrno(1146);
+
+	success = database_new.Select(&result, "SELECT `name`,`version`,`download_version`\n"
+		"FROM `table_versions`\n");
+	
+	database_new.RemoveIgnoredErrno(1146);
+
+	if (!success)
+		return false;
+
+	while (result.Next()) {
+		table_version = (TableVersion *)malloc(sizeof(*table_version));
+		table_version->name_len = (unsigned int)strlcpy(table_version->name, result.GetString(0), sizeof(table_version->name));
+		table_version->version = result.GetInt32(1);
+		table_version->data_version = result.GetInt32(2);
+
+		table_versions->push_back(table_version);
+	}
+
+	return true;
+}
+
+bool WorldDatabase::QueriesFromFile(const char * file) {
+	return database_new.QueriesFromFile(file);
 }
 
 bool WorldDatabase::CheckBannedIPs(const char* loginIP)

@@ -44,6 +44,7 @@ extern map<int16, int16> EQOpcodeVersions;
 #endif
 
 #ifdef WIN32
+	#include <WinSock2.h>
 	#include <windows.h>
 
 	#define snprintf	_snprintf
@@ -715,7 +716,7 @@ bool IsNumber(const char *num) {
 }
 
 void PrintSep(Seperator *sep, const char *name) {
-#ifdef DEBUG
+#ifdef _DEBUG
 	int32 i = 0;
 
 	LogWrite(MISC__WARNING, 0, "Misc", "Printing sep %s", name ? name : "No Name");
@@ -738,7 +739,7 @@ static bool INIGoToSection(FILE *f, const char *section) {
 	bool found = false;
 
 	if ((buf = (char *)malloc(size)) == NULL) {
-		fprintf(stderr, "%s: %u: Unable to allocate %u bytes\n", __FUNCTION__, __LINE__, size);
+		fprintf(stderr, "%s: %u: Unable to allocate %zu bytes\n", __FUNCTION__, __LINE__, size);
 		return false;
 	}
 
@@ -884,3 +885,34 @@ int16 GetOpcodeVersion(int16 version) {
 	return ret;
 }
 #endif
+
+void SleepMS(int32 milliseconds) {
+#if defined(_WIN32)
+	Sleep(milliseconds);
+#else
+	usleep(milliseconds * 1000);
+#endif
+}
+
+size_t
+strlcpy(char *dst, const char *src, size_t size) {
+	register char *d = dst;
+	register const char *s = src;
+	register size_t n = size;
+
+	if (n != 0 && --n != 0) {
+		do {
+			if ((*d++ = *s++) == 0)
+				break;
+		} while (--n != 0);
+	}
+
+	if (n == 0) {
+		if (size != 0)
+			*d = '\0';
+		while (*s++)
+			;
+	}
+
+	return(s - src - 1);
+}

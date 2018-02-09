@@ -21,7 +21,7 @@
 #define EQ2WORLD_EMU_DATABASE_H
 
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
 	#include <windows.h>
 #endif
 #include <mysql.h>
@@ -99,6 +99,7 @@ using namespace std;
 #define APPEARANCE_EART			44
 #define APPEARANCE_EYET			45
 #define APPEARANCE_LT			46
+#define APPEARANCE_BODY_AGE		47
 
 
 struct StartingItem{
@@ -109,6 +110,8 @@ struct StartingItem{
 	int8	attuned;
 	int8	count;
 };
+
+class Bot;
 
 class WorldDatabase : public Database {
 public:
@@ -122,6 +125,9 @@ public:
 	void	DeleteCharacterSkill(int32 char_id, Skill* skill);
 	void	DeleteCharacterSpell(int32 character_id, int32 spell_id);
 	int32	LoadCharacterSpells(int32 char_id, Player* player);
+	void SavePlayerActiveSpells(Client* client);
+	void DeleteCharacterActiveSpells(Client* client, bool delete_all = false);
+	int32	LoadItemBlueStats();
 	void	SaveQuickBar(int32 char_id, vector<QuickBarItem*>* quickbar_items);
 	void	SavePlayerSpells(Client* client);
 	int32	LoadSkills();
@@ -154,6 +160,7 @@ public:
 	void	LoadBuyBacks(Client* client);
 	void	SaveBuyBacks(Client* client);
 	void	SaveBuyBack(int32 char_id, int32 item_id, int8 quantity, int32 price);
+	void	LoadCharacterActiveSpells(Player * player);
 	void	DeleteItem(int32 char_id, Item* item, const char* type);
 	void	SaveCharacterColors(int32 char_id, const char* type, EQ2_Color color);
 	void	SaveCharacterFloats(int32 char_id, const char* type, float float1, float float2, float float3);
@@ -248,9 +255,12 @@ public:
 	int32	LoadThrownWeapons();
 	int32	LoadBaubles();
 	int32	LoadBooks();
+	int32	LoadItemsets();
 	int32	LoadHouseItem();
 	int32	LoadRecipeBookItems();
 	int32	LoadArmor();
+	int32	LoadAdornments();
+	int32	LoadClassifications();
 	int32	LoadShields();
 	int32	LoadBags();
 	int32	LoadFoods();
@@ -368,6 +378,10 @@ public:
 	bool				LocationExists(int32 location_id);
 
 
+	bool				GetTableVersions(vector<TableVersion *> *table_versions);
+	bool				QueriesFromFile(const char *file);
+
+
 	/* Achievements */
 	void				LoadAchievements();
 	int32				LoadAchievementRequirements(Achievement *achievement);
@@ -389,7 +403,7 @@ public:
 	void				SavePlayerCollections(Client *client);
 	void				SavePlayerCollection(Client *client, Collection *collection);
 	void				SavePlayerCollectionItems(Client *client, Collection *collection);
-	void				SavePlayerCollectionItem(Client *client, Collection *collection, Item *item);
+	void				SavePlayerCollectionItem(Client *client, Collection *collection, int32 item_id);
 	
 	/* Commands */
 	map<int32, string>* GetSpawnTemplateListByName(const char* name);
@@ -529,6 +543,19 @@ public:
 	/* Character LUA History */
 	void				SaveCharacterLUAHistory(Player* player, int32 event_id, int32 value, int32 value2);
 	void				LoadCharacterLUAHistory(int32 char_id, Player* player);
+
+	/* Bots - BotDB.cpp */
+	int32				CreateNewBot(int32 char_id, string name, int8 race, int8 advClass, int8 gender, int16 model_id, int32& index);
+	void				SaveBotAppearance(Bot* bot);
+	void				SaveBotColors(int32 bot_id, const char* type, EQ2_Color color);
+	void				SaveBotFloats(int32 bot_id, const char* type, float float1, float float2, float float3);
+	bool				LoadBot(int32 char_id, int32 bot_index, Bot* bot);
+	void				LoadBotAppearance(Bot* bot);
+	void				SaveBotItem(int32 bot_id, int32 item_id, int8 slot);
+	void				LoadBotEquipment(Bot* bot);
+	string				GetBotList(int32 char_id);
+	void				DeleteBot(int32 char_id, int32 bot_index);
+	void				SetBotStartingItems(Bot* bot, int8 class_id, int8 race_id);
 
 private:
 	DatabaseNew			database_new;

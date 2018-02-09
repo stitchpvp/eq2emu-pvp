@@ -947,6 +947,53 @@
 <Data ElementName="name" Type="char" Size="64" />
 <Data ElementName="unknown6" Type="int8" Size="17" />
 </Struct>
+<Struct Name="Substruct_Item" ClientVersion="63212" >
+<Data ElementName="unique_id" Type="int32" Size="1" />
+<Data ElementName="bag_id" Type="int32" Size="1" />
+<Data ElementName="inv_slot_id" Type="int32" Size="1" />
+<Data ElementName="menu_type" Type="int32" Size="1" />
+<Data ElementName="unknown3" Type="int32" Size="1" />
+<Data ElementName="index" Type="int16" Size="1" />
+<Data ElementName="icon" Type="int16" Size="1" />
+<Data ElementName="slot_id" Type="int8" Size="1" />
+<Data ElementName="count" Type="int8" Size="1" />
+<Data ElementName="unknown4a" Type="int8" Size="1" />
+<Data ElementName="unknown4b" Type="int8" Size="1" />
+<Data ElementName="unknown4c" Type="int8" Size="1" />
+<Data ElementName="item_level" Type="int8" Size="1" />
+<Data ElementName="tier" Type="int8" Size="1" />
+<Data ElementName="num_slots" Type="int8" Size="1" />
+<Data ElementName="empty_slots" Type="int8" Size="1" />
+<Data ElementName="unknown5_2" Type="int8" Size="1" />
+<Data ElementName="unknown5_3" Type="int8" Size="1" />
+<Data ElementName="item_id" Type="sint32" Size="1" />
+<Data ElementName="broker_id" Type="int64" Size="1" />
+<Data ElementName="name" Type="char" Size="64" />
+<Data ElementName="unknown6" Type="int8" Size="16" />
+</Struct>
+<Struct Name="Substruct_Item" ClientVersion="63214" >
+<Data ElementName="unique_id" Type="int32" Size="1" />
+<Data ElementName="bag_id" Type="int32" Size="1" />
+<Data ElementName="inv_slot_id" Type="int32" Size="1" />
+<Data ElementName="menu_type" Type="int32" Size="1" />
+<Data ElementName="unknown3" Type="int32" Size="1" />
+<Data ElementName="index" Type="int16" Size="1" />
+<Data ElementName="icon" Type="int16" Size="1" />
+<Data ElementName="slot_id" Type="int8" Size="1" />
+<Data ElementName="count" Type="int8" Size="1" />
+<Data ElementName="unknown4a" Type="int8" Size="1" />
+<Data ElementName="unknown4b" Type="int8" Size="1" />
+<Data ElementName="unknown4c" Type="int8" Size="1" />
+<Data ElementName="item_level" Type="int8" Size="1" />
+<Data ElementName="tier" Type="int8" Size="1" />
+<Data ElementName="num_slots" Type="int8" Size="1" />
+<Data ElementName="empty_slots" Type="int8" Size="1" />
+<Data ElementName="unknown5_2" Type="int8" Size="1" />
+<Data ElementName="item_id" Type="sint32" Size="1" />
+<Data ElementName="broker_id" Type="int64" Size="1" />
+<Data ElementName="name" Type="char" Size="64" />
+<Data ElementName="unknown6" Type="int8" Size="17" />
+</Struct>
 <Struct Name="Substruct_ItemFooter" ClientVersion="1" >
 <Data ElementName="num_effects" Type="int8" IfVariableNotSet="header_info_header_unknown_0_0,header_unknown_0" />
 <Data ElementName="effect_array" Type="Array" ArraySizeVariable="num_effects">
@@ -2998,6 +3045,10 @@
 <Data ElementName="info_header" Substruct="WS_ExamineInfoHeader" Size="1" />
 <Data ElementName="info" Substruct="Substruct_BaseItemDescription" Size="1" />
 </Struct>
+<Struct Name="Substruct_LootItemDescription" ClientVersion="63119" >
+<Data ElementName="info_header" Substruct="WS_ExamineInfoHeader" Size="1" />
+<Data ElementName="info" Substruct="Substruct_BaseItemDescription" Size="1" />
+</Struct>
 <Struct Name="Substruct_MerchantItemDescription" ClientVersion="1" >
 <Data ElementName="info_header" Substruct="WS_ExamineInfoHeader" Size="1" />
 <Data ElementName="info" Substruct="Substruct_BaseMerchantItemDescription" Size="1" />
@@ -3153,6 +3204,22 @@
 <Data ElementName="equip_flag" Type="int8" Size="1" />
 </Struct>
 <Struct Name="WS_UpdateInventory" ClientVersion="63119" OpcodeName="OP_UpdateInventoryMsg" >
+<Data ElementName="item_count" Type="int16" />
+<Data ElementName="packed_size" Type="int32" />
+<Data ElementName="item_array" Type="Array" ArraySizeVariable="item_count">
+  <Data ElementName="items" Substruct="Substruct_Item" Size="1" />
+</Data>
+<Data ElementName="equip_flag" Type="int8" Size="1" />
+</Struct>
+<Struct Name="WS_UpdateInventory" ClientVersion="63212" OpcodeName="OP_UpdateInventoryMsg" >
+<Data ElementName="item_count" Type="int16" />
+<Data ElementName="packed_size" Type="int32" />
+<Data ElementName="item_array" Type="Array" ArraySizeVariable="item_count">
+  <Data ElementName="items" Substruct="Substruct_Item" Size="1" />
+</Data>
+<Data ElementName="equip_flag" Type="int8" Size="1" />
+</Struct>
+<Struct Name="WS_UpdateInventory" ClientVersion="63214" OpcodeName="OP_UpdateInventoryMsg" >
 <Data ElementName="item_count" Type="int16" />
 <Data ElementName="packed_size" Type="int32" />
 <Data ElementName="item_array" Type="Array" ArraySizeVariable="item_count">

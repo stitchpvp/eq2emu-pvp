@@ -187,9 +187,9 @@ void Guild::AddEXPCurrent(sint64 exp, bool send_packet) {
 				sprintf(message, "The %s guild <%s> has attained level %u", adjective, name, level);
 				zone_list.HandleGlobalAnnouncement(message);
 			}
-			save_needed = true;
-			ret = true;
 		}
+		save_needed = true;
+		ret = true;
 	}
 	else if (exp < 0) {
 	}
@@ -371,7 +371,7 @@ int32 Guild::GetNextRecruiterID() {
 		if (itr->second->recruiter_id > 0)
 			tmp[itr->second->recruiter_id] = true;
 	}
-	for (i = 1; i <= 0xFFFFFFFF; i++) {
+	for (i = 1; i < 0xFFFFFFFF; i++) {
 		if (tmp.count(i) == 0) {
 			ret = i;
 			break;
@@ -1300,7 +1300,17 @@ bool Guild::ChangeMemberFlag(Client *client, int8 member_flag, int8 value, bool 
 
 	return ret;
 }
-
+bool Guild::UpdateGuildStatus(Player *player ,int32 Status) {
+	GuildMember *gm;
+	assert(player);
+	assert(members.count(player->GetCharacterID()) > 0);
+	mMembers.readlock(__FUNCTION__, __LINE__);
+	gm = members[player->GetCharacterID()];
+	gm->guild_status += Status;
+	mMembers.releasereadlock(__FUNCTION__, __LINE__);
+	member_save_needed = true;
+	return true;
+}
 bool Guild::UpdateGuildMemberInfo(Player *player) {
 
 	GuildMember *gm;
@@ -1315,7 +1325,7 @@ bool Guild::UpdateGuildMemberInfo(Player *player) {
 	gm->adventure_class = player->GetAdventureClass();
 	gm->adventure_level = player->GetLevel();
 	gm->tradeskill_class = player->GetTradeskillClass();
-	gm->tradeskill_level = 0;
+	gm->tradeskill_level = player->GetTSLevel();
 	gm->zone = string(player->GetZone()->GetZoneDescription());
 	gm->last_login_date = database.GetCharacterTimeStamp(player->GetCharacterID());
 	mMembers.releasereadlock(__FUNCTION__, __LINE__);
@@ -2269,12 +2279,11 @@ string Guild::GetEpicMobDeathMessage(const char* player_name, const char* mob_na
 		snprintf(message, sizeof(message), "%s was slain by %s's heroic might!", mob_name, player_name);
 	else if (choice == 4)
 		snprintf(message, sizeof(message), "%s slew %s in an earth shaking battle!", player_name, mob_name);
-	else if (choice == 5)
+	else 
 		snprintf(message, sizeof(message), "%s slew %s in a heroic clash!", player_name, mob_name);
 
-	return string(message);
 	LogWrite(GUILD__DEBUG, 0, "Guilds", "Guild Epic Mob Death message sent.");
-
+	return string(message);
 }
 
 /***************************************************************************************************************************************************************

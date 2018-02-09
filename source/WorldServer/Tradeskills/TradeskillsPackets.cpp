@@ -197,7 +197,7 @@ void ClientPacketFunctions::SendCreateFromRecipe(Client* client, int32 recipeID)
 	}
 
 	// Check to see if we have a fuel component (slot = 5)
-	if (recipe->components.count(5) >= 0) {
+	if (recipe->components.count(5) > 0) {
 		vector<int32> rc = recipe->components[5];
 		packet->setArrayLengthByName("num_fuel_choices", rc.size());
 		for (itr = rc.begin(); itr != rc.end(); itr++, i++) {
@@ -310,6 +310,7 @@ void ClientPacketFunctions::SendItemCreationUI(Client* client, Recipe* recipe) {
 			rp->product_qty = recipe->GetFuelComponentQuantity();
 			rp->byproduct_id = 0;
 			rp->byproduct_qty = 0;
+			recipe->products[i] = rp;
 		}
 		item = master_item_list.GetItem(rp->product_id);
 		if (!item) {

@@ -33,9 +33,16 @@ public:
 	string EscapeStr(const char *str);
 	string EscapeStr(string str);
 
+	bool QueriesFromFile(const char *file);
+	void SetIgnoredErrno(unsigned int db_errno);
+	void RemoveIgnoredErrno(unsigned int db_errno);
+	bool IsIgnoredErrno(unsigned int db_errno);
+
 private:
 	MYSQL mysql;
 	Mutex MMysql;
+
+	vector<unsigned int> ignored_errnos;
 };
 
 #endif

@@ -24,12 +24,14 @@
 #include "Skills.h"
 #include "MutexList.h"
 #include "MutexVector.h"
+#include <set>
 
 
 using namespace std;
 
 class Entity;
 class NPC;
+class Trade;
 struct LuaSpell;
 struct GroupMemberInfo;
 
@@ -120,7 +122,7 @@ struct InfoStruct{
 	int8			max_concentration;
 	int16			cur_attack;
 	int16			attack_base;
-	int16			cur_mitigation;
+	sint16			cur_mitigation;
 	int16			max_mitigation;
 	int16			mitigation_base;
 	int16			avoidance_display;
@@ -134,23 +136,28 @@ struct InfoStruct{
 	int16			deflection_base;
 	int16			block;
 	int16			block_base;
-	int16			str;
-	int16			sta;
-	int16			agi;
-	int16			wis;
-	int16			intel;
+	sint16			str;
+	sint16			sta;
+	sint16			agi;
+	sint16			wis;
+	sint16			intel;
 	int16			str_base;
 	int16			sta_base;
 	int16			agi_base;
 	int16			wis_base;
 	int16			intel_base;
-	int16			heat;
-	int16			cold;
-	int16			magic;
-	int16			mental;
-	int16			divine;
-	int16			disease;
-	int16			poison;
+	int16			str_temp = 0;
+	int16			sta_temp = 0;
+	int16			agi_temp = 0;
+	int16			wis_temp = 0;
+	int16			intel_temp = 0;
+	sint16			heat;
+	sint16			cold;
+	sint16			magic;
+	sint16			mental;
+	sint16			divine;
+	sint16			disease;
+	sint16			poison;
 	int16			disease_base;
 	int16			cold_base;
 	int16			divine_base;
@@ -179,7 +186,7 @@ struct InfoStruct{
 	int8			tradeskill_class1;
 	int8			tradeskill_class2;
 	int8			tradeskill_class3;
-	int8			account_age_base;
+	int16			account_age_base;
 	int8			account_age_bonus[19];
 	int16			absorb;
 	int32			xp;
@@ -204,11 +211,14 @@ struct InfoStruct{
 	float			critical_mitigation;
 	float			block_chance;
 	float			crit_chance;
+	float			crit_chance_temp = 0;
 	float			crit_bonus;
 	float			potency;
 	float			hate_mod;
 	float			reuse_speed;
+	float			reuse_speed_temp = 0;
 	float			casting_speed;
+	float			casting_speed_temp = 0;
 	float			recovery_speed;
 	float			spell_reuse_speed;
 	float			spell_multi_attack;
@@ -222,8 +232,11 @@ struct InfoStruct{
 	float			strikethrough;
 	float			accuracy;
 	float			offensivespeed;
+	float			base_avoidance_bonus;
+	float			minimum_deflection_chance;
 	float			rain;
 	float			wind;
+	sint8			physical_damage_reduction;
 	sint8			alignment;
 	int16			fame;
 
@@ -285,6 +298,7 @@ struct ThreatTransfer {
 	LuaSpell*	Spell;
 };
 
+#define DET_TYPE_ALL		 0
 #define DET_TYPE_TRAUMA      1
 #define DET_TYPE_ARCANE      2
 #define DET_TYPE_NOXIOUS     3
@@ -333,6 +347,7 @@ public:
 	virtual void RemoveSpellEffect(LuaSpell* spell);
 	virtual bool HasActiveMaintainedSpell(Spell* spell, Spawn* target);
 	virtual bool HasActiveSpellEffect(Spell* spell, Spawn* target);
+	virtual void AddSkillBonus(int32 spell_id, int32 skill_id, float value);
 	void AddDetrimentalSpell(LuaSpell* spell);
 	DetrimentalEffects* GetDetrimentalEffect(int32 spell_id, Entity* caster);
 	virtual MaintainedEffects* GetMaintainedSpell(int32 spell_id);
@@ -456,7 +471,7 @@ public:
 	float			GetDamageTypeResistPercentage(int8 damage_type);
 	Skill*			GetSkillByWeaponType(int8 type, bool update);
 	bool			DamageSpawn(Entity* victim, int8 type, int8 damage_type, int32 low_damage, int32 high_damage, const char* spell_name, int8 crit_mod = 0, bool is_tick = false, bool no_damage_calcs = false);
-	void			AddHate(Entity* attacker, sint32 hate);
+	void			AddHate(Entity* attacker, sint32 hate, bool unprovoked = false);
 	bool			CheckInterruptSpell(Entity* attacker);
 	void			KillSpawn(Spawn* dead, int8 damage_type = 0, int16 kill_blow_type = 0);
 	void            SetAttackDelay(bool primary = false, bool ranged = false);
@@ -567,8 +582,8 @@ public:
 	void SetSogaLegType(int16 new_val, bool setUpdateFlags = true){
 		SetInfo(&features.soga_legs_type, new_val, setUpdateFlags);
 	}	
-	void SetSkinColor(EQ2_Color* color){
-		SetInfo(&features.skin_color, *color);
+	void SetSkinColor(EQ2_Color color){
+		SetInfo(&features.skin_color, color);
 	}
 	void SetCombatVoice(int16 val, bool setUpdateFlags = true) { 
 		SetInfo(&features.combat_voice, val, setUpdateFlags); 
@@ -585,8 +600,8 @@ public:
 	void SetMountColor(EQ2_Color* color){
 		SetInfo(&features.mount_color, *color);
 	}
-	void SetEyeColor(EQ2_Color* eye_color){
-		SetInfo(&features.eye_color, *eye_color);
+	void SetEyeColor(EQ2_Color eye_color){
+		SetInfo(&features.eye_color, eye_color);
 	}
 	int16 GetHairType(){
 		return features.hair_type;
@@ -745,13 +760,14 @@ public:
 	Mutex* GetMaintainedMutex();
 	Mutex* GetSpellEffectMutex();
 	void ClearAllDetriments();
-	void CureDetrimentByType(int8 cure_count, int8 det_type, string cure_name, Entity* caster, int8 cure_level = 0);
+	void CureDetrimentByType(int8 cure_level, int8 det_type, string cure_name, Entity* caster);
 	void CureDetrimentByControlEffect(int8 cure_count, int8 det_type, string cure_name, Entity* caster, int8 cure_level = 0);
 	vector<DetrimentalEffects>* GetDetrimentalSpellEffects();
 	void RemoveEffectsFromLuaSpell(LuaSpell* spell);
 	virtual void RemoveSkillBonus(int32 spell_id);
 	void CancelAllStealth();
 	bool CanAttackTarget(Spawn* target);
+	bool IsHostile(Spawn* target);
 	bool IsStealthed();
 	bool IsInvis();
 	void AddInvisSpell(LuaSpell* spell);
@@ -794,7 +810,13 @@ public:
 	void SetGroupMemberInfo(GroupMemberInfo* info) { group_member_info = info; }
 	void UpdateGroupMemberInfo();
 
-	float GetMitigationPercentage() { return info_struct.cur_mitigation / (GetLevel() * 100.0); }
+	void CustomizeAppearance(PacketStruct* packet);
+	Trade* trade;
+
+	// Keep track of entities that hate this spawn.
+	set<int32> HatedBy;
+
+	float GetMitigationPercentage(int enemy_level) { return info_struct.cur_mitigation / ((40 * enemy_level) + info_struct.cur_mitigation + 200.0); }
 
 protected:
 	bool	in_combat;
@@ -814,6 +836,7 @@ private:
 	float	last_z;
 	float	last_heading;
 	bool	casting;
+	bool has_secondary_weapon;
 	InfoStruct		info_struct;
 	CombatData melee_combat_data;
 	CombatData ranged_combat_data;

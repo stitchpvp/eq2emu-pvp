@@ -18,7 +18,7 @@
     along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 */
 #ifdef WIN32
-	#include <winsock.h>
+	#include <WinSock2.h>
 	#include <windows.h>
 #endif
 #include <mysql.h>
@@ -93,10 +93,10 @@ int32 WorldDatabase::LoadCollectionItems(Collection *collection)
 			if ((item = master_item_list.GetItem(atoul(row[0])))) 
 			{
 				collection_item = new struct CollectionItem;
-				collection_item->item = master_item_list.GetItem(atoul(row[0]));
+				collection_item->item = atoul(row[0]);
 				collection_item->index = atoi(row[1]);
 				collection_item->found = 0;
-				LogWrite(COLLECTION__DEBUG, 5, "Collect", "\tLoading Collection Item: '%s' (%u)", collection_item->item->name.c_str(), atoul(row[0]));
+				LogWrite(COLLECTION__DEBUG, 5, "Collect", "\tLoading Collection Item: (%u)", atoul(row[0])); //LogWrite(COLLECTION__DEBUG, 5, "Collect", "\tLoading Collection Item: '%s' (%u)", master_item_list.GetItem(collection_item->item)->name.c_str(), atoul(row[0]));
 				collection->AddCollectionItem(collection_item);
 				total++;
 			}
@@ -280,16 +280,16 @@ void WorldDatabase::SavePlayerCollectionItems(Client *client, Collection *collec
 	}
 }
 
-void WorldDatabase::SavePlayerCollectionItem(Client *client, Collection *collection, Item *item) 
+void WorldDatabase::SavePlayerCollectionItem(Client *client, Collection *collection, int32 item_id) 
 {
 	Query query;
 
 	assert(client);
 	assert(collection);
-	assert(item);
+	//assert(item);
 
 	query.RunQuery2(Q_INSERT,	"INSERT IGNORE INTO `character_collection_items` (`char_id`,`collection_id`,`collection_item_id`)\n"
 								"VALUES (%u,%u,%u)",
-								client->GetPlayer()->GetCharacterID(), collection->GetID(), item->details.item_id);
+								client->GetPlayer()->GetCharacterID(), collection->GetID(), item_id);
 }
 

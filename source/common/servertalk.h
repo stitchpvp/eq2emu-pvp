@@ -308,7 +308,7 @@ struct ServerEmoteMessage_Struct {
 	char	message[0];
 };
 
-struct TableVersion{
+/*struct TableVersion{
 	char	name[64];
 	int32	version;
 	int32	max_table_version;
@@ -316,7 +316,15 @@ struct TableVersion{
 	sint32	data_version;
 	int8	last;
 	char	column_names[1000];
-};
+};*/
+
+typedef struct {
+	char name[256];
+	unsigned int name_len;
+	unsigned int version;
+	unsigned int data_version;
+} TableVersion;
+
 template<class Type> void AddPtrData(string* buffer, Type& data){
 	buffer->append((char*)&data, sizeof(Type));
 }
@@ -396,6 +404,9 @@ public:
 		try_delete = true;
 		num_queries = 0;
 		data_version = 0;
+		current_index = 0;
+		latest_version = 0;
+		your_version = 0;
 		total_size = sizeof(num_queries) + sizeof(latest_version) + sizeof(your_version) + sizeof(tablename);
 	}
 	~TableQuery(){
@@ -476,11 +487,15 @@ public:
 		num_queries = 0;
 		columns_size = 0;
 		columns = 0;
+		version = 0;
+		table_size = 0;
 	}
 	TableDataQuery(){
 		num_queries = 0;
 		columns_size = 0;
 		columns = 0;
+		version = 0;
+		table_size = 0;
 	}
 	~TableDataQuery(){
 		safe_delete_array(columns);

@@ -113,6 +113,7 @@ void AchievementUpdate::AddAchievementUpdateItems(struct AchievementUpdateItems 
 
 MasterAchievementList::MasterAchievementList() {
 	m_packetsCreated = false;
+	masterPacket = 0;
 	mutex_achievements.SetName("MasterAchievementList::achievements");
 }
 

@@ -33,7 +33,7 @@ void WorldDatabase::LoadRaceTypes() {
 		while (result.Next()) {
 			int16 race_id = result.GetInt16Str("race_id");
 			if (race_id > 0) {
-				race_types_list.AddRaceType(result.GetInt32Str("model_id"), race_id);
+				race_types_list.AddRaceType(result.GetInt32Str("model_type"), race_id);
 				count++;
 			}
 		}

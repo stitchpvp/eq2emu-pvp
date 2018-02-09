@@ -213,6 +213,11 @@ EQProtocolPacket::EQProtocolPacket(const unsigned char *buf, uint32 len, int in_
 	}
 	version = 0;
 	eq2_compressed = false;
+	packet_prepared = false;
+	packet_encrypted = false;
+	sent_time = 0;
+	attempt_count = 0;
+	sequence = 0;
 }
 
 bool EQ2Packet::AppCombine(EQ2Packet* rhs){

@@ -18,8 +18,8 @@
     along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 */
 #ifdef WIN32
+#include <WinSock2.h>
 	#include <windows.h>
-	#include <winsock.h>
 #endif
 #include "debug.h"
 #include <string>
@@ -294,7 +294,7 @@ void EQStream::ProcessPacket(EQProtocolPacket *p)
 					LogWrite(PACKET__DEBUG, 1, "Packet", "[End]");
 #endif				
 					OutOfOrderpackets[seq] = p->Copy();
-					SendOutOfOrderAck(seq);
+					//SendOutOfOrderAck(seq);
 				} else if (check<0) {
 #ifdef EQN_DEBUG
 					LogWrite(PACKET__DEBUG, 1, "Packet", "*** Duplicate packet: Expecting Seq=%i, but got Seq=%i", NextInSeq, seq);
@@ -302,7 +302,7 @@ void EQStream::ProcessPacket(EQProtocolPacket *p)
 					//p->DumpRawHeader(seq);
 					LogWrite(PACKET__DEBUG, 1, "Packet", "[End]");
 #endif
-					OutOfOrderpackets[seq] = p->Copy();
+					//OutOfOrderpackets[seq] = p->Copy();
 					SendOutOfOrderAck(seq);
 				} else {
 					SetNextAckToSend(seq);
@@ -334,7 +334,7 @@ void EQStream::ProcessPacket(EQProtocolPacket *p)
 					LogWrite(PACKET__DEBUG, 1, "Packet", "[End]");
 #endif
 					OutOfOrderpackets[seq] = p->Copy();
-					SendOutOfOrderAck(seq);
+					//SendOutOfOrderAck(seq);
 				} else if (check<0) {
 #ifdef EQN_DEBUG
 					LogWrite(PACKET__DEBUG, 1, "Packet", "*** Duplicate packet2: Expecting Seq=%i, but got Seq=%i", NextInSeq, seq);
@@ -342,7 +342,7 @@ void EQStream::ProcessPacket(EQProtocolPacket *p)
 					//p->DumpRawHeader(seq);
 					LogWrite(PACKET__DEBUG, 1, "Packet", "[End]");
 #endif
-					OutOfOrderpackets[seq] = p->Copy();
+					//OutOfOrderpackets[seq] = p->Copy();
 					SendOutOfOrderAck(seq);
 				} else {
 					SetNextAckToSend(seq);
@@ -874,7 +874,7 @@ void EQStream::Write(int eq_fd)
 	// If we got more packets to we need to ack, send an ack on the highest one
 	MAcks.lock();
 	maxack=MaxAckReceived;
-	if (NextAckToSend>LastAckSent)
+	if (NextAckToSend > LastAckSent || LastAckSent == 0x0000ffff)
 		SendAck(NextAckToSend);
 	MAcks.unlock();
 

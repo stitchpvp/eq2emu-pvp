@@ -35,6 +35,7 @@ public:
 		access_count = 0;
 		has_pending_deletes = false;
 		next_delete_attempt = 0;
+		delete_all = false;
 	}
 	~MutexMap(){
 		update(true);

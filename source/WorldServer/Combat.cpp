@@ -31,6 +31,7 @@
 #include "Rules/Rules.h"
 #include "SpellProcess.h"
 #include <math.h>
+#include "PVP.h"
 
 extern Classes classes;
 extern ConfigReader configReader;
@@ -113,6 +114,11 @@ bool Entity::AttackAllowed(Entity* target, float distance, bool range_attack) {
 		return false;
 	}
 
+	if (IsPlayer() && target->IsBot()) {
+		LogWrite(COMBAT__DEBUG, 3, "AttackAllowed", "Failed to attack: players are not allowed to attack bots");
+		return false;
+	}
+
 	if (target->GetHP() <= 0) {
 		LogWrite(COMBAT__DEBUG, 3, "AttackAllowed", "Failed to attack: target is dead");
 		return false;
@@ -143,7 +149,7 @@ bool Entity::AttackAllowed(Entity* target, float distance, bool range_attack) {
 		}
 	}
 	else if (distance != 0) {
-		if(distance >= MAX_COMBAT_RANGE) {
+		if(distance > MAX_COMBAT_RANGE) {
 			LogWrite(COMBAT__DEBUG, 3, "AttackAllowed", "Failed to attack: distance is beyond melee range");
 			return false;
 		}
@@ -230,6 +236,9 @@ void Entity::MeleeAttack(Spawn* victim, float distance, bool primary, bool multi
 		((NPC*)victim)->AddHate(this, 50);
 	}
 
+	if (IsPlayer() && victim->IsPlayer())
+		PVP::HandlePlayerEncounter(static_cast<Player*>(this), static_cast<Player*>(victim), true);
+
 	if (victim->IsEntity() && victim->GetHP() > 0 && ((Entity*)victim)->HasPet()) {
 		Entity* pet = 0;
 		bool AddHate = false;
@@ -289,6 +298,9 @@ void Entity::RangeAttack(Spawn* victim, float distance, Item* weapon, Item* ammo
 			if(victim->IsNPC() && victim->EngagedInCombat() == false) {
 				((NPC*)victim)->AddHate(this, 50);
 			}
+
+			if (IsPlayer() && victim->IsPlayer())
+				PVP::HandlePlayerEncounter(static_cast<Player*>(this), static_cast<Player*>(victim), true);
 
 			if (victim->IsEntity() && victim->GetHP() > 0 && ((Entity*)victim)->HasPet()) {
 				Entity* pet = 0;
@@ -464,9 +476,6 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 		 CheckProcs(PROC_TYPE_BENEFICIAL, target);
 	 }
 
-	 if (target->GetHP() == target->GetTotalHP())
-		 return true;
-
 	 int32 heal_amt = 0;
 	 bool crit = false;
 
@@ -486,7 +495,7 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 				crit_mod = 2;
 		}
 		
-		if (heal_amt >= 0){
+		if (heal_amt > 0){
 			//int32 base_roll = heal_amt;
 			//potency mod
 			heal_amt *= (stats[ITEM_STAT_POTENCY] / 100 + 1);
@@ -497,8 +506,6 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 			//Ability Modifier can only be up to half of base roll + potency and primary stat bonus
 			heal_amt += (int32)min(info_struct.ability_modifier, (float)(heal_amt / 2));
 		}
-		else
-			heal_amt = 0;
 
 		if(!crit_mod || crit_mod == 1){
 			if(crit_mod == 1) 
@@ -519,6 +526,9 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 
 	int16 type = 0;
 	if (heal_type == "Heal") {
+		if (target->GetHP() == target->GetTotalHP())
+			return true;
+
 		if(crit)
 			type = HEAL_PACKET_TYPE_CRIT_HEAL;
 		else
@@ -529,6 +539,9 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 		target->SetHP(target->GetHP() + heal_amt);
 	}
 	else if (heal_type == "Power"){
+		if (target->GetPower() == target->GetTotalPower())
+			return true;
+
 		if(crit)
 			type = HEAL_PACKET_TYPE_CRIT_MANA;
 		else
@@ -563,6 +576,17 @@ bool Entity::SpellHeal(Spawn* target, float distance, LuaSpell* luaspell, string
 	target->GetZone()->TriggerCharSheetTimer();
 	if (heal_amt > 0)
 		GetZone()->SendHealPacket(this, target, type, heal_amt, luaspell->spell->GetName());
+
+	if (target->IsEntity()) {
+		int32 hate_amt = heal_amt / 2;
+		set<int32>::iterator itr;
+		for (itr = ((Entity*)target)->HatedBy.begin(); itr != ((Entity*)target)->HatedBy.end(); itr++) {
+			Spawn* spawn = GetZone()->GetSpawnByID(*itr);
+			if (spawn && spawn->IsEntity()) {
+				((Entity*)spawn)->AddHate(this, hate_amt);
+			}
+		}
+	}
 
 	return true;
 }
@@ -623,9 +647,9 @@ int8 Entity::DetermineHit(Spawn* victim, int8 damage_type, float ToHitBonus, boo
 
 	float bonus = ToHitBonus;
 	Skill* skill = GetSkillByWeaponType(damage_type, true);
-	if(skill)
-		bonus += skill->current_val/25;
-	if(victim->IsEntity())
+	if (skill)
+		bonus += skill->current_val / 25;
+	if (victim->IsEntity())
 		bonus -= ((Entity*)victim)->GetDamageTypeResistPercentage(damage_type);
 
 
@@ -640,13 +664,12 @@ int8 Entity::DetermineHit(Spawn* victim, int8 damage_type, float ToHitBonus, boo
 		if(skill)
 			roll_chance -= skill->current_val / 25;
 
-		if(rand()%roll_chance >= (chance - entity_victim->GetAgi()/125)){
+		if(rand()%roll_chance >= (chance - entity_victim->GetInfoStruct()->base_avoidance_bonus - entity_victim->GetAgi() / 125)){
 			entity_victim->CheckProcs(PROC_TYPE_EVADE, this);
 			return DAMAGE_PACKET_RESULT_DODGE;//successfully dodged
 		}
-		if(rand()%roll_chance >= chance){
+		if(rand() % roll_chance >= chance)
 			return DAMAGE_PACKET_RESULT_MISS; //successfully avoided
-		}
 
 		skill = entity_victim->GetSkillByName("Parry", true);
 		if(skill){
@@ -662,7 +685,7 @@ int8 Entity::DetermineHit(Spawn* victim, int8 damage_type, float ToHitBonus, boo
 
 		skill = entity_victim->GetSkillByName("Deflection", true);
 		if(skill){
-			if(rand()%100 >= (chance - skill->current_val/25)) { //successfully deflected
+			if(rand()%100 >= (chance - entity_victim->GetInfoStruct()->minimum_deflection_chance - skill->current_val/25)) { //successfully deflected
 				return DAMAGE_PACKET_RESULT_DEFLECT;
 			}
 		}
@@ -818,7 +841,8 @@ bool Entity::DamageSpawn(Entity* victim, int8 type, int8 damage_type, int32 low_
 
 		// Rudimentary mitigation
 		if (type == DAMAGE_PACKET_TYPE_SIMPLE_DAMAGE || type == DAMAGE_PACKET_TYPE_RANGE_DAMAGE) {
-			damage *= 1 - victim->GetMitigationPercentage();
+			damage *= 1 - victim->GetMitigationPercentage(GetLevel());
+			damage *= 1 - victim->GetInfoStruct()->physical_damage_reduction / 100.0;
 		}
 	}
 
@@ -863,10 +887,12 @@ bool Entity::DamageSpawn(Entity* victim, int8 type, int8 damage_type, int32 low_
 
 	if(victim->IsEntity())
 		((Entity*)victim)->CheckInterruptSpell(this);
-	if(victim->GetHP() <= 0)
+
+	if (victim->GetHP() <= 0) {
 		KillSpawn(victim, damage_type, blow_type);
-	else {
+	} else if (victim->EngagedInCombat()) {
 		victim->CheckProcs(PROC_TYPE_DEFENSIVE, this);
+
 		if (spell_name)
 			victim->CheckProcs(PROC_TYPE_MAGICAL_DEFENSIVE, this);
 		else
@@ -876,7 +902,7 @@ bool Entity::DamageSpawn(Entity* victim, int8 type, int8 damage_type, int32 low_
 	return crit;
 }
 
-void Entity::AddHate(Entity* attacker, sint32 hate) {
+void Entity::AddHate(Entity* attacker, sint32 hate, bool unprovoked) {
 	if(!attacker || GetHP() <= 0 || attacker->GetHP() <= 0)
 		return;
 
@@ -886,9 +912,11 @@ void Entity::AddHate(Entity* attacker, sint32 hate) {
 
 	if (IsNPC()) {
 		LogWrite(COMBAT__DEBUG, 3, "Combat", "Add NPC_AI Hate: Victim '%s', Attacker '%s', Hate: %i", GetName(), attacker->GetName(), hate);
-		((NPC*)this)->Brain()->AddHate(attacker, hate);
+
+		((NPC*)this)->Brain()->AddHate(attacker, hate, unprovoked);
+
 		// if encounter size is 0 then add the attacker to the encounter
-		if (((NPC*)this)->Brain()->GetEncounterSize() == 0)
+		if (!unprovoked && ((NPC*)this)->Brain()->GetEncounterSize() == 0)
 			((NPC*)this)->Brain()->AddToEncounter(attacker);
 	}
 
@@ -924,7 +952,7 @@ void Entity::AddHate(Entity* attacker, sint32 hate) {
 				continue;
 			NPC* spawn = (NPC*)(*itr);
 			if (spawn->Brain()->GetHate(attacker) == 0)
-				spawn->Brain()->AddHate(attacker, 1);
+				spawn->Brain()->AddHate(attacker, 1, unprovoked);
 		}
 		safe_delete(group);
 	}
@@ -965,19 +993,6 @@ void Entity::KillSpawn(Spawn* dead, int8 damage_type, int16 kill_blow_type) {
 	if (IsPlayer() && dead->IsEntity())
 		GetZone()->GetSpellProcess()->KillHOBySpawnID(dead->GetID());
 
-	//if (dead->IsEntity())								same code called in zone server
-		//((Entity*)dead)->InCombat(false);
-	
-	if (dead->IsPet())
-		((NPC*)dead)->GetOwner()->DismissPet((NPC*)dead, true);
-	else if (dead->IsEntity()) {
-		// remove all pets for this entity
-		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetPet());
-		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetCharmedPet());
-		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetDeityPet());
-		((Entity*)dead)->DismissPet((NPC*)((Entity*)dead)->GetCosmeticPet());
-	}
-
 	// If not in combat and no one in the encounter list add this killer to the list
 	if(dead->EngagedInCombat() == false && dead->IsNPC() && ((NPC*)dead)->Brain()->GetEncounterSize() == 0)
 		((NPC*)dead)->Brain()->AddToEncounter(this);
@@ -1012,7 +1027,8 @@ void NPC::ProcessCombat() {
 }
 
 void Player::ProcessCombat() {
-	// if not in combat OR casting a spell OR dazed  OR feared return out
+	CheckEncounterList();
+
 	if (!EngagedInCombat() || IsCasting() || IsDazed() || IsFeared())
 		return;
 
@@ -1032,13 +1048,11 @@ void Player::ProcessCombat() {
 	// Reset combat target
 	combat_target = 0;
 
-	if (Target->HasTarget()) {
-		if (!CanAttackTarget(Target)) {
-			Spawn* secondary_target = Target->GetTarget();
+	if (Target->HasTarget() && !IsHostile(Target)) {
+		Spawn* secondary_target = Target->GetTarget();
 
-			if (CanAttackTarget(secondary_target))
-				combat_target = secondary_target;
-		}
+		if (IsHostile(secondary_target))
+			combat_target = secondary_target;
 	}
 	
 	// If combat_target wasn't set in the above if set it to the original target
@@ -1049,59 +1063,47 @@ void Player::ProcessCombat() {
 	if(!combat_target)
 		return;
 
-	float distance = 0;
-	distance = GetDistance(combat_target);
-	//distance -= combat_target->appearance.pos.collision_radius / 10;
-	//distance -= appearance.pos.collision_radius / 10;
+	float distance = GetDistance(combat_target);
 
 	// Check to see if we are doing ranged auto attacks if not check to see if we are in melee range
-	if (GetRangeAttack()) {
-		// We are doing ranged auto attacks
-		
-		//check to see if we can attack the target AND the ranged weapon is ready
-		if(AttackAllowed((Entity*)combat_target, distance, true) && RangeWeaponReady()) {
-			Item* weapon = 0;
-			Item* ammo = 0;
-			// Get the currently equiped weapon and ammo for the ranged attack
-			weapon = GetEquipmentList()->GetItem(EQ2_RANGE_SLOT);
-			ammo = GetEquipmentList()->GetItem(EQ2_AMMO_SLOT);
-			LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon '%s', Ammo '%s'", ( weapon )? weapon->name.c_str() : "None", ( ammo ) ? ammo->name.c_str() : "None");
+	if (GetRangeAttack() && AttackAllowed((Entity*)combat_target, distance, true) && RangeWeaponReady()) {
+		Item* weapon = 0;
+		Item* ammo = 0;
+		// Get the currently equiped weapon and ammo for the ranged attack
+		weapon = GetEquipmentList()->GetItem(EQ2_RANGE_SLOT);
+		ammo = GetEquipmentList()->GetItem(EQ2_AMMO_SLOT);
+		LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon '%s', Ammo '%s'", ( weapon )? weapon->name.c_str() : "None", ( ammo ) ? ammo->name.c_str() : "None");
 
-			// If weapon and ammo are both valid perform the ranged attack else send a message to the client
-			if(weapon && ammo) {
-				LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon: Primary, Fighter: '%s', Target: '%s', Distance: %.2f", GetName(), combat_target->GetName(), distance);
-				RangeAttack(combat_target, distance, weapon, ammo);
-			}
-			else {
-				Client* client = GetZone()->GetClientBySpawn(this);
-				if (client) {
-					// Need to get messages from live, made these up so the player knows what is wrong in game if weapon or ammo are not valid
-					if (!ammo)
-						client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Out of ammo.");
-					if (!weapon)
-						client->SimpleMessage(CHANNEL_COLOR_YELLOW, "No ranged weapon found.");
+		// If weapon and ammo are both valid perform the ranged attack else send a message to the client
+		if(weapon && ammo) {
+			LogWrite(COMBAT__DEBUG, 1, "Combat", "Weapon: Primary, Fighter: '%s', Target: '%s', Distance: %.2f", GetName(), combat_target->GetName(), distance);
+			RangeAttack(combat_target, distance, weapon, ammo);
+		}
+		else {
+			Client* client = GetZone()->GetClientBySpawn(this);
+			if (client) {
+				// Need to get messages from live, made these up so the player knows what is wrong in game if weapon or ammo are not valid
+				if (!ammo)
+					client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Out of ammo.");
+				if (!weapon)
+					client->SimpleMessage(CHANNEL_COLOR_YELLOW, "No ranged weapon found.");
 					
-				}
 			}
 		}
 	}
-	else if(distance <= MAX_COMBAT_RANGE) {
-		// We are doing melee auto attacks and are within range
+	else if (GetMeleeAttack() && AttackAllowed((Entity*)combat_target, distance)) {
+		// Check to see if the primary melee weapon is ready
+		if(PrimaryWeaponReady()) {
+			// Set the time of the last melee attack with the primary weapon and perform the melee attack with primary weapon
+			SetPrimaryLastAttackTime(Timer::GetCurrentTime2());
+			MeleeAttack(combat_target, distance, true);
+		}
 
-		// Check to see if we can attack the target
-		if(AttackAllowed((Entity*)combat_target)) {
-			// Check to see if the primary melee weapon is ready
-			if(PrimaryWeaponReady()) {
-				// Set the time of the last melee attack with the primary weapon and perform the melee attack with primary weapon
-				SetPrimaryLastAttackTime(Timer::GetCurrentTime2());
-				MeleeAttack(combat_target, distance, true);
-			}
-			// Check to see if the secondary weapon is ready
-			if(SecondaryWeaponReady()) {
-				// set the time of the last melee attack with the secondary weapon and perform the melee attack with the secondary weapon
-				SetSecondaryLastAttackTime(Timer::GetCurrentTime2());
-				MeleeAttack(combat_target, distance, false);
-			}
+		// Check to see if the secondary weapon is ready
+		if(SecondaryWeaponReady()) {
+			// set the time of the last melee attack with the secondary weapon and perform the melee attack with the secondary weapon
+			SetSecondaryLastAttackTime(Timer::GetCurrentTime2());
+			MeleeAttack(combat_target, distance, false);
 		}
 	}
 }
@@ -1192,8 +1194,8 @@ bool Entity::CastProc(Proc* proc, int8 type, Spawn* target) {
 
 	if (proc->spell) {
 		state = proc->spell->state;
-	}
-	else if (proc->item) {
+		lua_interface->SetCurrentSpell(state, proc->spell);
+	} else if (proc->item) {
 		state = lua_interface->GetItemScript(proc->item->GetItemScript());
 		item_proc = true;
 	}
@@ -1262,15 +1264,20 @@ void Entity::CheckProcs(int8 type, Spawn* target) {
 		return;
 	}
 
+	vector<Proc*> procs;
+
 	MProcList.readlock(__FUNCTION__, __LINE__);
 	for (int8 i = 0; i < m_procList[type].size(); i++) {
 		Proc* proc = m_procList[type].at(i);
 		float roll = MakeRandomFloat(0, 100);
 
 		if (roll <= proc->chance)
-			CastProc(proc, type, target);
+			procs.push_back(proc);
 	}
 	MProcList.releasereadlock(__FUNCTION__, __LINE__);
+
+	for (const auto proc : procs)
+		CastProc(proc, type, target);
 }
 
 void Entity::ClearProcs() {

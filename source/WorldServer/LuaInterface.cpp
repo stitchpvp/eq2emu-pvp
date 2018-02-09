@@ -441,7 +441,7 @@ void LuaInterface::AddSpawnPointers(LuaSpell* spell, bool first_cast, bool preca
 
 	if (temp_spawn)
 		SetSpawnValue(spell->state, temp_spawn);
-	else
+	else if (spell->caster)
 		SetSpawnValue(spell->state, spell->caster);
 
 	if (spell->initial_target && precast)
@@ -468,6 +468,10 @@ LuaSpell* LuaInterface::GetCurrentSpell(lua_State* state) {
 	if(current_spells.count(state) > 0)
 		return current_spells[state];
 	return 0;
+}
+
+void LuaInterface::SetCurrentSpell(lua_State* state, LuaSpell* spell) {
+	current_spells[state] = spell;
 }
 
 bool LuaInterface::CallSpellProcess(LuaSpell* spell, int8 num_parameters) {
@@ -542,7 +546,7 @@ bool LuaInterface::CallZoneScript(lua_State* state, int8 num_parameters) {
 lua_State* LuaInterface::LoadLuaFile(const char* name) {
 	if(shutting_down)
 		return 0;
-	lua_State* state = lua_open();
+	lua_State* state = luaL_newstate();
 	luaL_openlibs(state);
 	if(luaL_dofile(state, name) == 0){
 		RegisterFunctions(state);
@@ -562,8 +566,6 @@ void LuaInterface::RemoveSpell(LuaSpell* spell, Spawn* spawn, bool call_remove_f
 
 	if(call_remove_function){
 		lua_getglobal(spell->state, "remove");
-
-		current_spells[spell->state] = spell;
 
 		LUASpawnWrapper* spawn_wrapper = new LUASpawnWrapper();
 		spawn_wrapper->spawn = spell->caster;
@@ -659,6 +661,8 @@ void LuaInterface::RegisterFunctions(lua_State* state) {
 	lua_register(state, "GetItemByID", EQ2Emu_lua_GetItemByID);
 	lua_register(state, "GetItemType", EQ2Emu_lua_GetItemType);
 	lua_register(state, "GetSpellName", EQ2Emu_lua_GetSpellName);
+	lua_register(state, "GetCaster", EQ2Emu_lua_GetCaster);
+	lua_register(state, "SpellWasCured", EQ2Emu_lua_SpellWasCured);
 	
 	lua_register(state, "GetModelType", EQ2Emu_lua_GetModelType);
 	lua_register(state, "GetSpeed", EQ2Emu_lua_GetSpeed);
@@ -977,6 +981,7 @@ void LuaInterface::RegisterFunctions(lua_State* state) {
 	lua_register(state, "PauseMovement", EQ2Emu_lua_PauseMovement);
 	lua_register(state, "ResumeMovement", EQ2Emu_lua_ResumeMovement);
 	lua_register(state, "GetProcPercentageForWeapon", EQ2Emu_lua_GetProcPercentageForWeapon);
+	lua_register(state, "RemoveSpell", EQ2Emu_lua_RemoveSpell);
 }
 
 void LuaInterface::LogError(const char* error, ...)  {
@@ -1182,7 +1187,7 @@ ZoneServer* LuaInterface::GetZone(lua_State* state, int8 arg_num) {
 sint32 LuaInterface::GetSInt32Value(lua_State* state, int8 arg_num) {
 	sint32 val = 0;
 	if(lua_isnumber(state, arg_num)){
-		val = lua_tointeger(state, arg_num);
+		val = lua_tonumber(state, arg_num);
 	}
 	return val;
 }

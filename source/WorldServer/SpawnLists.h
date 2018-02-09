@@ -60,6 +60,7 @@ public:
 		placement_id = 0;
 		pitch = 0;
 		roll = 0;
+		grid_id = 0;
 	}
 	~SpawnLocation(){
 		for(int32 i=0;i<entities.size();i++)

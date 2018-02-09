@@ -1,120 +1,209 @@
+#These are the build commands for Lua
+SYSCFLAGS="-DLUA_COMPAT_ALL -DLUA_USE_LINUX"
+LUABUILDCMD=gcc -O2 -Wall -c $(SYSCFLAGS)
+LUADIR=LUA
+BUILDLUA=@echo Building Lua 5.3.4...; cd $(LUADIR); \
+$(LUABUILDCMD) lapi.c; \
+$(LUABUILDCMD) lauxlib.c; \
+$(LUABUILDCMD) lbaselib.c; \
+$(LUABUILDCMD) lbitlib.c; \
+$(LUABUILDCMD) lcode.c; \
+$(LUABUILDCMD) lcorolib.c; \
+$(LUABUILDCMD) lctype.c; \
+$(LUABUILDCMD) ldblib.c; \
+$(LUABUILDCMD) ldebug.c; \
+$(LUABUILDCMD) ldo.c; \
+$(LUABUILDCMD) ldump.c; \
+$(LUABUILDCMD) lfunc.c; \
+$(LUABUILDCMD) lgc.c; \
+$(LUABUILDCMD) linit.c; \
+$(LUABUILDCMD) liolib.c; \
+$(LUABUILDCMD) llex.c; \
+$(LUABUILDCMD) lmathlib.c; \
+$(LUABUILDCMD) lmem.c; \
+$(LUABUILDCMD) loadlib.c; \
+$(LUABUILDCMD) lobject.c; \
+$(LUABUILDCMD) lopcodes.c; \
+$(LUABUILDCMD) loslib.c; \
+$(LUABUILDCMD) lparser.c; \
+$(LUABUILDCMD) lstate.c; \
+$(LUABUILDCMD) lstring.c; \
+$(LUABUILDCMD) lstrlib.c; \
+$(LUABUILDCMD) ltable.c; \
+$(LUABUILDCMD) ltablib.c; \
+$(LUABUILDCMD) ltm.c; \
+$(LUABUILDCMD) lundump.c; \
+$(LUABUILDCMD) lutf8lib.c; \
+$(LUABUILDCMD) lvm.c; \
+$(LUABUILDCMD) lzio.c; \
+$(LUABUILDCMD) lua.hpp; \
+ar rs liblua5-3-4.a *.o; \
+echo Finished with Lua.
+
+#ar rs liblua5-3-4.a lapi.o lauxlib.o lbaselib.o lbitlib.o lcode.o lcorolib.o lctype.o ldblib.o ldebug.o ldo.o ldump.o lfunc.o lgc.o linit.o liolib.o llex.o lmathlib.o lmem.o loadlib.o lobject.o lopcodes.o loslib.o lparser.o lstate.o lstring.o lstrlib.o ltable.o ltablib.o ltm.o lundump.o lutf8lib.o lvm.o lzio.o; \
+
 APP=eq2world
-SF= ../common/Condition.o \
-../common/ConfigReader.o \
-../common/CRC16.o \
-../common/Crypto.o \
-../common/DatabaseNew.o \
-../common/DatabaseResult.o \
-../common/dbcore.o \
-../common/emu_opcodes.o \
-../common/EQEMuError.o \
-../common/Log.o \
-../common/md5.o \
-../common/misc.o \
-../common/MiscFunctions.o \
-../common/Mutex.o \
-../common/opcodemgr.o \
-../common/packet_dump.o \
-../common/packet_functions.o \
-../common/PacketStruct.o \
-../common/RC4.o \
-../common/TCPConnection.o \
-../common/timer.o \
-../common/unix.o \
-../common/xmlParser.o \
-.obj/debug.o \
-.obj/database.o \
-.obj/EQStream.o \
-.obj/EQStreamFactory.o \
-.obj/EQPacket.o \
-Achievements/Achievements.o \
-Achievements/AchievementsDB.o \
-AltAdvancement/AltAdvancement.o \
-AltAdvancement/AltAdvancementDB.o \
-Chat/Chat.o \
-Chat/ChatDB.o \
-Chat/ChatChannel.o \
-classes.o \
-client.o \
-ClientPacketFunctions.o \
-Collections/Collections.o \
-Collections/CollectionsDB.o \
-Combat.o \
-Commands/Commands.o \
-Commands/CommandsDB.o \
-Commands/ConsoleCommands.o \
-Entity.o \
-Factions.o \
-GroundSpawn.o \
-Guilds/Guild.o \
-Guilds/GuildDB.o \
-HeroicOp/HeroicOp.o \
-HeroicOp/HeroicOpDB.o \
-HeroicOp/HeroicOpPackets.o \
-Housing/HousingDB.o \
-Housing/HousingPackets.o \
-IRC/IRC.o \
-IRC/IRCChannel.o \
-IRC/IRCMessage.o \
-IRC/IRCServer.o \
-Items/Items.o \
-Items/ItemsDB.o \
-Items/Loot.o \
-Items/LootDB.o \
-Languages.o \
-LoginServer.o \
-LuaFunctions.o \
-LuaInterface.o \
-net.o \
-NPC.o \
-NPC_AI.o \
-Object.o \
-Player.o \
-PlayerGroups.o \
-Quests.o \
-races.o \
-RaceTypes/RaceTypes.o \
-RaceTypes/RaceTypesDB.o \
-Recipes/Recipe.o \
-Recipes/RecipeDB.o \
-Rules/Rules.o \
-Rules/RulesDB.o \
-Sign.o \
-Skills.o \
-Spawn.o \
-Spells.o \
-SpellProcess.o \
-Titles.o \
-Tradeskills/Tradeskills.o \
-Tradeskills/TradeskillsDB.o \
-Tradeskills/TradeskillsPackets.o \
-Traits/Traits.o \
-Widget.o \
-World.o \
-WorldDatabase.o \
-zoneserver.o
+SRC= ../common/Condition.o \
+	../common/ConfigReader.o \
+	../common/CRC16.o \
+	../common/Crypto.o \
+	../common/DatabaseNew.o \
+	../common/DatabaseResult.o \
+	../common/dbcore.o \
+	../common/emu_opcodes.o \
+	../common/EQEMuError.o \
+	../common/Log.o \
+	../common/md5.o \
+	../common/misc.o \
+	../common/MiscFunctions.o \
+	../common/Mutex.o \
+	../common/opcodemgr.o \
+	../common/packet_dump.o \
+	../common/packet_functions.o \
+	../common/PacketStruct.o \
+	../common/RC4.o \
+	../common/TCPConnection.o \
+	../common/timer.o \
+	../common/unix.o \
+	../common/xmlParser.o \
+	../common/debug.o \
+	../common/database.o \
+	../common/EQStream.o \
+	../common/EQStreamFactory.o \
+	../common/EQPacket.o \
+	Achievements/Achievements.o \
+	Achievements/AchievementsDB.o \
+	AltAdvancement/AltAdvancement.o \
+	AltAdvancement/AltAdvancementDB.o \
+	Chat/Chat.o \
+	Chat/ChatDB.o \
+	Chat/ChatChannel.o \
+	classes.o \
+	client.o \
+	ClientPacketFunctions.o \
+	Collections/Collections.o \
+	Collections/CollectionsDB.o \
+	Combat.o \
+	Commands/Commands.o \
+	Commands/CommandsDB.o \
+	Commands/ConsoleCommands.o \
+	Entity.o \
+	Factions.o \
+	GroundSpawn.o \
+	Guilds/Guild.o \
+	Guilds/GuildDB.o \
+	HeroicOp/HeroicOp.o \
+	HeroicOp/HeroicOpDB.o \
+	HeroicOp/HeroicOpPackets.o \
+	Housing/HousingDB.o \
+	Housing/HousingPackets.o \
+	IRC/IRC.o \
+	IRC/IRCChannel.o \
+	IRC/IRCMessage.o \
+	IRC/IRCServer.o \
+	Items/Items.o \
+	Items/ItemsDB.o \
+	Items/Loot.o \
+	Items/LootDB.o \
+	Languages.o \
+	LoginServer.o \
+	LuaFunctions.o \
+	LuaInterface.o \
+	net.o \
+	NPC.o \
+	NPC_AI.o \
+	Object.o \
+	Patch/buffer.o \
+	Patch/patch.o \
+	Patch/tcp.o \
+	Patch/tcp-client.o \
+	Player.o \
+	PlayerGroups.o \
+	Quests.o \
+	races.o \
+	RaceTypes/RaceTypes.o \
+	RaceTypes/RaceTypesDB.o \
+	Recipes/Recipe.o \
+	Recipes/RecipeDB.o \
+	Rules/Rules.o \
+	Rules/RulesDB.o \
+	Sign.o \
+	Skills.o \
+	Spawn.o \
+	Spells.o \
+	SpellProcess.o \
+	Titles.o \
+	Tradeskills/Tradeskills.o \
+	Tradeskills/TradeskillsDB.o \
+	Tradeskills/TradeskillsPackets.o \
+	Traits/Traits.o \
+	Widget.o \
+	World.o \
+	WorldDatabase.o \
+	Zone/SPGrid.o \
+	zoneserver.o
 
 
-CC=g++
-LINKER=gcc
+CXXFLAGS=-std=c++0x
+CFLAGS=`mysql_config --cflags` -march=native -pipe -pthread
+LDFLAGS=`mysql_config --libs` -I$(LUADIR) -L$(LUADIR) -llua5-3-4 -rdynamic
+WFLAGS=-Wall -Wno-reorder
 DFLAGS=-DEQ2 -DWORLD
-WFLAGS=-Wall
-CFLAGS=`mysql_config --cflags` -I../LUA/include
-LIB=`mysql_config --libs` -L../LUA -llua5.1
-COPTS=$(WFLAGS) -g -march=athlon64 -O -pthread -pipe -DFX -D_GNU_SOURCE -DINVERSEXY $(DFLAGS) $(CFLAGS)
-LINKOPTS=-rdynamic -L. -lstdc++ -lm -lz $(LIB) -ldl
+CC=g++
+LINKER=g++
+
+#Switch for Debug or Release build
+ifeq ($(BUILD),release)
+# "Release" build - optimization, and no debug symbols
+CFLAGS += -O2 -s -DNDEBUG
+else
+# "Debug" build - minimum optimization, and debugging symbols
+CFLAGS += -O -ggdb
+endif
+
 all: $(APP)
-
-$(APP): $(SF)
-	@$(LINKER) $(COPTS) $(OBJS) $^ $(LINKOPTS) -o $@
-
-clean:
-	@rm -f $(SF) $(APP)
-
+	
+$(APP): $(SRC)
+	$(BUILDLUA)
+	@echo Linking...; $(LINKER) $(CFLAGS) $(WFLAGS) $(DFLAGS) $(CXXFLAGS) $(OBJS) $^ $(LDFLAGS) -o $@ -lm -Wl,-E -ldl -lreadline
+	@echo Finished building world.
+	
 %.o: %.cpp
-	@$(CC) -c $(COPTS) $< -o $@
+	$(CC) -c $(CFLAGS) $(CXXFLAGS) $(WFLAGS) $(DFLAGS) $< -o $@
+	
+.obj/%.o: $(COMMON)/%.cpp $(COMMON)/%.h
+	mkdir -p .obj
+	$(CC) $(CFLAGS) $(WFLAGS) $(DFLAGS) $(CXXFLAGS) -c $< -o $@
+	
+debug:
+	@$(MAKE) "BUILD=debug"
 
-.obj/%.o: ../common/%.cpp ../common/%.h
-	@mkdir -p .obj
-	@$(CC) $(COPTS) -c $< -o $@
+release:
+	@$(MAKE) "BUILD=release"
+	
+clean:
+	rm -f $(SRC) $(APP)
+	
+	
+
+
+
+#CFLAGS=`mysql_config --cflags` -I../LUA/include
+#LIB=`mysql_config --libs` -L../LUA -llua5.1
+#COPTS=$(WFLAGS) -g -march=athlon64 -O -pthread -pipe -DFX -D_GNU_SOURCE -DINVERSEXY $(DFLAGS) $(CFLAGS)
+#LINKOPTS=-rdynamic -L. -lstdc++ -lm -lz $(LIB) -ldl
+#all: $(APP)
+
+#$(APP): $(SF)
+#	@$(LINKER) $(COPTS) $(OBJS) $^ $(LINKOPTS) -o $@
+
+#clean:
+#	@rm -f $(SF) $(APP)
+
+#%.o: %.cpp
+#	@$(CC) -c $(COPTS) $< -o $@
+
+#.obj/%.o: ../common/%.cpp ../common/%.h
+#	@mkdir -p .obj
+#	@$(CC) $(COPTS) -c $< -o $@
 
