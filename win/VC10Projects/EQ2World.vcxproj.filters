@@ -526,7 +526,6 @@
     <ClCompile Include="..\..\source\WorldServer\PVP.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\WorldServer\MasterServer.cpp">
     <ClCompile Include="..\..\source\WorldServer\Bots\Bot.cpp">
       <Filter>Source Files\Bots</Filter>
     </ClCompile>
@@ -540,6 +539,9 @@
       <Filter>Source Files\Bots</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\WorldServer\Trade.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\WorldServer\MasterServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -928,13 +930,14 @@
     <ClInclude Include="..\..\source\WorldServer\PVP.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\WorldServer\MasterServer.h">
-      <Filter>Header Files</Filter>
     <ClInclude Include="..\..\source\WorldServer\Bots\Bot.h">
       <Filter>Header Files\Bots</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\WorldServer\Bots\BotBrain.h">
       <Filter>Header Files\Bots</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\WorldServer\MasterServer.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

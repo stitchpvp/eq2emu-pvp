@@ -107,6 +107,7 @@
 #define ServerOP_LSPlayerZoneChange	0x3008
 
 #define ServerOP_MSHello			0x4000
+#define ServerOP_MSAuthPlayer		0x4001
 
 #define	ServerOP_UsertoWorldReq		0xAB00
 #define	ServerOP_UsertoWorldResp	0xAB01
@@ -246,6 +247,11 @@ struct ServerLSStatus_Struct {
 
 struct ServerMSInfo_Struct {
 	char hello[5];
+};
+
+struct ServerMSAuthPlayer_Struct {
+	int32	account_id;
+	int32	char_id;
 };
 
 struct ServerSystemwideMessage {

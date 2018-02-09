@@ -109,6 +109,7 @@ public:
 	const char*	GetCharacterName() { return character_name.c_str(); }
 	int32	GetAccessKey() { return accesskey; }
 	int32	GetTimeStamp() { return timestamp; }
+	void	SetTimeStamp(int32 new_timestamp) { timestamp = new_timestamp; }
 	void	setFirstLogin(bool value) { firstlogin = value; }
 	bool	isFirstLogin() { return firstlogin; }
 private:

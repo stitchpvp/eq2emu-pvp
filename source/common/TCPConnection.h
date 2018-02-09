@@ -25,8 +25,6 @@
 */
 
 #ifdef WIN32
-	#define snprintf	_snprintf
-	#define vsnprintf	_vsnprintf
 	#define strncasecmp	_strnicmp
 	#define strcasecmp  _stricmp
 

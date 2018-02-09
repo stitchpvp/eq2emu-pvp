@@ -8,6 +8,8 @@ public:
 	~MasterServer();
 
 	bool Connect();
+	bool Connected() { return tcpc->Connected(); }
+	bool Process();
 	void SayHello();
 
 private:

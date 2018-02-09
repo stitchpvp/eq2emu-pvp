@@ -439,6 +439,7 @@ int main(int argc, char** argv) {
 			world.Process();
 			client_list.Process();
 			loginserver.Process();
+			master_server.Process();
 			if(TimeoutTimer->Check()){
 				eqsf.CheckTimeout();
 			}
@@ -446,14 +447,12 @@ int main(int argc, char** argv) {
 				InterserverTimer.Start();
 				database.ping();
 
-				if (master_server.Connect()) {
+				if (!master_server.Connected() && master_server.Connect()) {
 					LogWrite(WORLD__INFO, 0, "Master", "Connected to Master Server");
 					master_server.SayHello();
-				} else {
-					LogWrite(WORLD__INFO, 0, "Master", "Failed to connect to Master Server");
 				}
 
-				/*if (net.LoginServerInfo && loginserver.Connected() == false && loginserver.CanReconnect()) {
+				if (net.LoginServerInfo && loginserver.Connected() == false && loginserver.CanReconnect()) {
 					LogWrite(WORLD__DEBUG, 0, "Thread", "Starting autoinit loginserver thread...");
 #ifdef WIN32
 					_beginthread(AutoInitLoginServer, 0, NULL);
@@ -462,7 +461,7 @@ int main(int argc, char** argv) {
 					pthread_create(&thread, NULL, &AutoInitLoginServer, NULL);
 					pthread_detach(thread);
 #endif
-				}*/
+				}
 			}
 #ifndef NO_CATCH
 		}
