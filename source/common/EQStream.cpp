@@ -466,14 +466,23 @@ void EQStream::ProcessPacket(EQProtocolPacket *p)
 			}
 			break;
 			case OP_SessionStatResponse: {
+				LogWrite(PACKET__INFO, 0, "Packet", "OP_SessionStatResponse");
 			}
 			break;
 			case OP_OutOfSession: {
+				LogWrite(PACKET__INFO, 0, "Packet", "OP_OutOfSession");
 			}
 			break;
 			default:
-				EQApplicationPacket *ap = p->MakeApplicationPacket(app_opcode_size);
-				InboundQueuePush(ap);
+				//LogWrite(PACKET__INFO, 0, "Packet", "OP_UnknownPacket, Calling MakeApplicationPacket");
+				//ProcessEncryptedData(p->pBuffer + 9, p->size - 9, p->opcode);
+				//DumpPacket(p->pBuffer, p->size);
+				//EQApplicationPacket *ap = p->MakeApplicationPacket(app_opcode_size);
+				//InboundQueuePush(ap);
+
+				// Not sure how to handle these garbage packets yet. Safety precaution.
+				LogWrite(PACKET__INFO, 0, "Packet", "Received unknown packet type, disconnecting client");
+				SendDisconnect();
 				break;
 		}
 		if (OutOfOrderpackets.find(NextInSeq) != OutOfOrderpackets.end()){
