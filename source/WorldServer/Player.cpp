@@ -1753,9 +1753,8 @@ void Player::UnlockAllSpells(bool first_load) {
 		}
 
 		if (entry->type != SPELL_BOOK_TYPE_TRADESKILL && entry->recast_available < Timer::GetCurrentTime2()) {
-			if (!GetSpellEffect(entry->spell_id, this) || master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
-				if (!HasLinkedSpellEffect(master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->linked_timer))
-					AddSpellStatus(entry, SPELL_STATUS_READY);
+			if (!HasLinkedSpellEffect(master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->linked_timer) || master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+				AddSpellStatus(entry, SPELL_STATUS_READY);
 			}
 		}
 	}
@@ -1768,9 +1767,8 @@ void Player::LockSpell(Spell* spell, int16 recast) {
 		if (entry->spell_id == spell->GetSpellID()) {
 			RemoveSpellStatus(entry, SPELL_STATUS_READY);
 
-			if (!GetSpellEffect(spell->GetSpellID(), this) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
-				if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer))
-					ModifyRecast(entry, recast);
+			if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+				ModifyRecast(entry, recast);
 			}
 		}
 	}
@@ -1794,11 +1792,9 @@ void Player::UnlockSpell(Spell* spell) {
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
 	for (auto entry : spells) {
 		if (entry->spell_id == spell->GetSpellID() && entry->recast_available < Timer::GetCurrentTime2()) {
-			if (!GetSpellEffect(spell->GetSpellID(), this) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
-				if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer)) {
-					AddSpellStatus(entry, SPELL_STATUS_READY);
-					ModifyRecast(entry, 0);
-				}
+			if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+				AddSpellStatus(entry, SPELL_STATUS_READY);
+				ModifyRecast(entry, 0);
 			}
 		}
 	}
