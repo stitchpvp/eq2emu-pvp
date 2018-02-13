@@ -291,7 +291,7 @@ bool SpellProcess::IsReady(Spell* spell, Entity* caster) {
 	if (caster->IsCasting())
 		return false;
 
-	if (spell->GetSpellData()->cast_type == SPELL_CAST_TYPE_TOGGLE && caster->IsPlayer() && static_cast<Player*>(caster)->HasLinkedSpellEffect(spell->GetSpellData()->linked_timer))
+	if (spell->GetSpellData()->cast_type == SPELL_CAST_TYPE_TOGGLE && caster->IsPlayer() && static_cast<Player*>(caster)->HasLinkedSpellEffect(spell))
 		return false;
 
 	bool ret = true;	

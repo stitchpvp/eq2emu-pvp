@@ -763,7 +763,7 @@ public:
 	/// <summary>Locks the given spell as well as all spells with a shared timer</summary>
 	void LockSpell(Spell* spell, int16 recast);
 
-	bool HasLinkedSpellEffect(int32 timer_id);
+	bool HasLinkedSpellEffect(Spell* spell);
 
 	/// <summary>Unlocks the given spell as well as all spells with shared timers</summary>
 	void UnlockSpell(Spell* spell);

@@ -1753,7 +1753,9 @@ void Player::UnlockAllSpells(bool first_load) {
 		}
 
 		if (entry->type != SPELL_BOOK_TYPE_TRADESKILL && entry->recast_available < Timer::GetCurrentTime2()) {
-			if (!HasLinkedSpellEffect(master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->linked_timer) || master_spell_list.GetSpell(entry->spell_id, entry->tier)->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+			Spell* spell = master_spell_list.GetSpell(entry->spell_id, entry->tier);
+
+			if (spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE || (!GetSpellEffect(spell->GetSpellID(), this) && !HasLinkedSpellEffect(spell))) {
 				AddSpellStatus(entry, SPELL_STATUS_READY);
 			}
 		}
@@ -1767,7 +1769,7 @@ void Player::LockSpell(Spell* spell, int16 recast) {
 		if (entry->spell_id == spell->GetSpellID()) {
 			RemoveSpellStatus(entry, SPELL_STATUS_READY);
 
-			if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+			if (spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE || (!GetSpellEffect(spell->GetSpellID(), this) && !HasLinkedSpellEffect(spell))) {
 				ModifyRecast(entry, recast);
 			}
 		}
@@ -1775,24 +1777,11 @@ void Player::LockSpell(Spell* spell, int16 recast) {
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
 }
 
-bool Player::HasLinkedSpellEffect(int32 timer_id) {
-	if (!timer_id)
-		return false;
-
-	vector<Spell*> linkedSpells = GetSpellBookSpellsByTimer(timer_id, false);
-	for (const auto &spell : linkedSpells) {
-		if (GetSpellEffect(spell->GetSpellID(), this))
-			return true;
-	}
-
-	return false;
-}
-
 void Player::UnlockSpell(Spell* spell) {
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
 	for (auto entry : spells) {
 		if (entry->spell_id == spell->GetSpellID() && entry->recast_available < Timer::GetCurrentTime2()) {
-			if (!HasLinkedSpellEffect(spell->GetSpellData()->linked_timer) || spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE) {
+			if (spell->GetSpellData()->cast_type != SPELL_CAST_TYPE_TOGGLE || (!GetSpellEffect(spell->GetSpellID(), this) && !HasLinkedSpellEffect(spell))) {
 				AddSpellStatus(entry, SPELL_STATUS_READY);
 				ModifyRecast(entry, 0);
 			}
@@ -1843,6 +1832,20 @@ void Player::UnQueueSpell(Spell* spell) {
 		}
 	}
 	MSpellsBook.releasewritelock(__FUNCTION__, __LINE__);
+}
+
+bool Player::HasLinkedSpellEffect(Spell* spell) {
+	if (!spell->GetSpellData()->linked_timer)
+		return false;
+
+	vector<Spell*> linkedSpells = GetSpellBookSpellsByTimer(spell->GetSpellData()->linked_timer, false);
+	for (const auto linked_spell : linkedSpells) {
+		if (linked_spell == spell) continue;
+		if (GetSpellEffect(linked_spell->GetSpellID(), this))
+			return true;
+	}
+
+	return false;
 }
 
 vector<Spell*> Player::GetSpellBookSpellsByTimer(int32 timerID, bool should_lock) {
