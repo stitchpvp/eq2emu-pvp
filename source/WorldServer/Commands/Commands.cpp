@@ -1388,7 +1388,7 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 				int32 quantity = 1;
 
 				if (sep->arg[1] && sep->IsNumber(1))
-					quantity = atol(sep->arg[1]);
+					quantity = atoi(sep->arg[1]);
 
 				client->AddItem(item_id, quantity);
 			}
@@ -1760,17 +1760,15 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, Client* clie
 			}
 			break;
 							}
-		case COMMAND_CLASS:{
-			if(sep && sep->arg[ndx][0]){
-				client->GetPlayer()->GetInfoStruct()->class1 = atoi(sep->arg[ndx]);
-				client->GetPlayer()->GetInfoStruct()->class2 = atoi(sep->arg[ndx]);
-				client->GetPlayer()->GetInfoStruct()->class3 = atoi(sep->arg[ndx]);
-				client->GetPlayer()->SetCharSheetChanged(true);
-				client->UpdateTimeStampFlag ( CLASS_UPDATE_FLAG );
-			}else
-				client->SimpleMessage(CHANNEL_COLOR_YELLOW,"Usage:  /class {class_id}");
+		case COMMAND_CLASS: {
+			if (sep && sep->arg[ndx][0]) {
+				client->GetPlayer()->SetPlayerAdventureClass(atoi(sep->arg[ndx]));
+				client->UpdateTimeStampFlag(CLASS_UPDATE_FLAG);
+			} else {
+				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Usage:  /class {class_id}");
+			}
 			break;
-						   }
+		}
 		case COMMAND_GENDER:{
 			if(sep && sep->arg[ndx][0]){
 				client->GetPlayer()->GetInfoStruct()->gender = atoi(sep->arg[ndx]);
