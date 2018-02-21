@@ -26,8 +26,10 @@ along with EQ2Emulator.  If not, see <http://www.gnu.org/licenses/>.
 #include <assert.h>
 #include "WorldDatabase.h"
 #include "../common/debug.h"
+#include "../common/md5.h"
 #include "../common/packet_dump.h"
 #include "../common/GlobalHeaders.h"
+#include "../common/picosha.h"
 #include "Items/Items.h"
 #include "Factions.h"
 #include "World.h"
@@ -205,24 +207,27 @@ int32 WorldDatabase::LoadCharacterSpells(int32 char_id, Player* player)
 
 	Query query;
 	MYSQL_ROW row;
-	MYSQL_RES* result = query.RunQuery2(Q_SELECT, "SELECT spell_id, tier, knowledge_slot, spell_book_type, linked_timer_id  FROM character_spells, spells where character_spells.spell_id = spells.id and character_spells.char_id = %u ORDER BY spell_id, tier desc", char_id);
+	MYSQL_RES* result = query.RunQuery2(Q_SELECT, "SELECT spell_id, tier, knowledge_slot FROM character_spells where character_spells.char_id = %u ORDER BY spell_id, tier desc", char_id);
 	int32 old_spell_id = 0;
 	int32 new_spell_id = 0;
 	int32 count = 0;
 
-	if(result && mysql_num_rows(result) >0)
+	if(result && mysql_num_rows(result) > 0)
 	{
 		while(result && (row = mysql_fetch_row(result)))
 		{
 			count++;
+
 			new_spell_id = atoul(row[0]);
 
 			if(new_spell_id == old_spell_id)
 				continue;
 
-			LogWrite(SPELL__DEBUG, 5, "Spells", "\tLoading SpellID: %u, tier: %i, slot: %i, type: %u linked_timer_id: %u", new_spell_id, atoi(row[1]), atoi(row[2]), atoul(row[3]), atoul(row[4]));
+			Spell* spell = master_spell_list.GetSpell(new_spell_id, atoi(row[1]));
 
-			player->AddSpellBookEntry(new_spell_id, atoi(row[1]), atoi(row[2]), atoul(row[3]), atoul(row[4]));
+			if (spell)
+				player->AddSpellBookEntry(new_spell_id, atoi(row[1]), atoi(row[2]), spell->GetSpellData()->spell_book_type, spell->GetSpellData()->linked_timer);
+
 			old_spell_id = new_spell_id;
 		}
 	}
@@ -4104,18 +4109,21 @@ void WorldDatabase::SaveQuickBar(int32 char_id, vector<QuickBarItem*>* quickbar_
 }
 
 map<int32, vector<LevelArray*> >* WorldDatabase::LoadSpellClasses(){
-	map<int32, vector<LevelArray*> >* ret = new map<int32, vector<LevelArray*> >();
+	map<int32, vector<LevelArray*>>* ret = new map<int32, vector<LevelArray*>>();
 	Query query;
+
 	MYSQL_RES* result = query.RunQuery2(Q_SELECT, "SELECT spell_id, adventure_class_id, tradeskill_class_id, level FROM spell_classes");
 	MYSQL_ROW row;
-	LevelArray* level = 0;
+
 	while(result && (row = mysql_fetch_row(result))){
-		level = new LevelArray();
+		LevelArray* level = new LevelArray();
 		level->adventure_class = atoi(row[1]);
 		level->tradeskill_class = atoi(row[2]);
 		level->spell_level = atoi(row[3]);
+
 		(*ret)[atoul(row[0])].push_back(level);
 	}
+
 	return ret;
 }
 
@@ -4146,149 +4154,175 @@ void WorldDatabase::LoadTraits(){
 void WorldDatabase::LoadSpells()
 {
 	DatabaseResult result;
-	Spell *spell;
-	SpellData *data;
 	int32 t_now = Timer::GetUnixTimeStamp();
 	int32 total = 0;
-	map<int32, vector<LevelArray*> >* level_data = LoadSpellClasses();
+	map<int32, vector<LevelArray*>>* level_data = LoadSpellClasses();
 
-	if( !database_new.Select(&result, "SELECT s.`id`, `name`, `description`, `type`, `class_skill`, `mastery_skill`, `tier`, `hp_req`, `power_req`, `cast_time`, `recast`, `radius`, `max_aoe_targets`, `req_concentration`, `range`, `duration1`, `duration2`, `resistibility`, `hp_upkeep`, `power_upkeep`, `duration_until_cancel`, `target_type`, `recovery`, `power_req_percent`, `hp_req_percent`, `icon`, `icon_heroic_op`, `icon_backdrop`, `success_message`, `fade_message`, `cast_type`, `lua_script`, `call_frequency`, `interruptable`, `spell_visual`, `effect_message`, `min_range`, `can_effect_raid`, `affect_only_group_members`, `hit_bonus`, `display_spell_tier`, `friendly_spell`, `group_spell`, `spell_book_type`, spell_type+0, s.is_active, savagery_req, savagery_req_percent, savagery_upkeep, dissonance_req, dissonance_req_percent, dissonance_upkeep, linked_timer_id, det_type, incurable, control_effect_type, cast_while_moving, casting_flags, persist_through_death, not_maintained, savage_bar, savage_bar_slot, soe_spell_crc "
-									"FROM spells s, spell_tiers st "
-									"WHERE s.id = st.spell_id AND s.is_active = 1 "
-									"ORDER BY s.`id`, `tier`") )
-	{
-		// error
-	}
-	else
-	{
-		while( result.Next() )
-		{
-			data = new SpellData;
-			int32 spell_id		= result.GetInt32Str("id");
-			string spell_name	= result.GetStringStr("name");
+	const char* query_string = R"END(
+			SELECT
+				s.`id`, `name`, `description`, `type`, `class_skill`, `mastery_skill`, `hp_req`, `power_req`, `cast_time`, `recast`,
+				`radius`, `max_aoe_targets`, `req_concentration`, `range`, `duration1`, `duration2`, `resistibility`, `hp_upkeep`,
+				`power_upkeep`, `duration_until_cancel`, `target_type`, `recovery`, `power_req_percent`, `hp_req_percent`, `icon`,
+				`icon_heroic_op`, `icon_backdrop`, `success_message`, `fade_message`, `cast_type`, `lua_script`, `call_frequency`,
+				`interruptable`, `spell_visual`, `effect_message`, `min_range`, `can_effect_raid`, `affect_only_group_members`,
+				`hit_bonus`, `display_spell_tier`, `friendly_spell`, `group_spell`, `spell_book_type`, `spell_type`, `is_active`,
+				`savagery_req`, `savagery_req_percent`, `savagery_upkeep`, `dissonance_req`, `dissonance_req_percent`, `dissonance_upkeep`,
+				`linked_timer_id`, `det_type`, `incurable`, `control_effect_type`, `cast_while_moving`, `casting_flags`, `persist_through_death`,
+				`not_maintained`, `savage_bar`, `savage_bar_slot`
+			FROM spells s, spell_tiers st
+			WHERE s.`id` = st.`spell_id` AND s.`is_active` = 1
+			ORDER BY s.`id`
+		)END";
 
-			/* General Spell info */
-			data->id						= spell_id;
-			data->soe_spell_crc				= result.GetInt32Str("soe_spell_crc");
-			data->tier						= result.GetInt8Str("tier");
-			data->name.data					= spell_name.c_str();
-			data->name.size					= data->name.data.length();
-			data->description.data			= result.GetStringStr("description");
-			data->description.size			= data->description.data.length();
-			data->icon						= result.GetSInt16Str("icon");
-			data->icon_heroic_op			= result.GetInt16Str("icon_heroic_op");
-			data->icon_backdrop				= result.GetInt16Str("icon_backdrop");
-			data->spell_visual				= result.GetInt32Str("spell_visual");
-			data->type						= result.GetInt16Str("type");
-			data->target_type				= result.GetInt8Str("target_type");
-			data->cast_type					= result.GetInt8Str("cast_type");
-			data->spell_book_type			= result.GetInt32Str("spell_book_type");
-			data->det_type                  = result.GetInt8Str("det_type");
-			data->incurable                 = (result.GetInt8Str("incurable") == 1);
-			data->control_effect_type       = result.GetInt8Str("control_effect_type");
-			data->casting_flags             = result.GetInt32Str("casting_flags");
-			data->savage_bar				= result.GetInt8Str("savage_bar");
-			data->savage_bar_slot			= result.GetInt8Str("savage_bar_slot");
-			data->spell_type				= result.IsNullStr("spell_type+0") ? 0 : result.GetInt8Str("spell_type+0");
+	if (database_new.Select(&result, query_string)) {
+		while (result.Next()) {
+			int32 spell_id = result.GetInt32Str("id");
+			string spell_name = result.GetStringStr("name");
 
+			vector<SpellDisplayEffect*> spell_display_effects = LoadSpellEffect(spell_id);
+			vector<LUAData*> lua_data = LoadSpellLuaData(spell_id);
+			
+			if (level_data && level_data->count(spell_id) > 0) {
+				int spell_num = 0;
 
-			/* Toggles */
-			data->interruptable				= ( result.GetInt8Str("interruptable") == 1);
-			data->duration_until_cancel		= ( result.GetInt8Str("duration_until_cancel") == 1);
-			data->can_effect_raid			= result.GetInt8Str("can_effect_raid");
-			data->affect_only_group_members = result.GetInt8Str("affect_only_group_members");
-			data->display_spell_tier		= result.GetInt8Str("display_spell_tier");
-			data->friendly_spell			= result.GetInt8Str("friendly_spell");
-			data->group_spell				= result.GetInt8Str("group_spell");
-			data->is_active					= result.GetInt8Str("is_active");
-			data->persist_though_death      = ( result.GetInt8Str("persist_through_death") == 1);
-			data->cast_while_moving         = ( result.GetInt8Str("cast_while_moving") == 1);
-			data->not_maintained            = ( result.GetInt8Str("not_maintained") == 1);
+				for (const auto spell_level : level_data->at(spell_id)) {
+					spell_num++;
+					total++;
 
-			/* Skill Requirements */
-			data->class_skill				= result.GetInt32Str("class_skill");
-			data->mastery_skill				= result.GetInt32Str("mastery_skill");
-			// no min_class_skill_req?
+					SpellData* data = new SpellData;
 
-			/* Cost  */
-			data->req_concentration			= result.GetInt16Str("req_concentration");
-			data->hp_req					= result.GetInt16Str("hp_req");
-			data->hp_upkeep					= result.GetInt16Str("hp_upkeep");
-			data->hp_req_percent			= result.GetInt8Str("hp_req_percent");
-			data->power_req					= result.GetInt16Str("power_req");
-			data->power_upkeep				= result.GetInt16Str("power_upkeep");
-			data->power_req_percent			= result.GetInt8Str("power_req_percent");
-			data->savagery_req				= result.GetInt16Str("savagery_req");
-			data->savagery_upkeep			= result.GetInt16Str("savagery_upkeep");
-			data->savagery_req_percent		= result.GetInt8Str("savagery_req_percent");
-			data->dissonance_req			= result.GetInt16Str("dissonance_req");
-			data->dissonance_upkeep			= result.GetInt16Str("dissonance_upkeep");
-			data->dissonance_req_percent	= result.GetInt8Str("dissonance_req_percent");
+					string hash_str = spell_name + " " + to_string(spell_level->spell_level);
+					string hash_hex;
+					picosha2::hash256_hex_string(hash_str, hash_hex);
+					sint32 hash = std::stoi(hash_hex.substr(0, 7), nullptr, 16);
 
-			/* Spell Parameters */
-			data->call_frequency			= result.GetInt32Str("call_frequency");
-			data->cast_time					= result.GetInt16Str("cast_time");
-			data->duration1					= result.GetInt32Str("duration1");
-			data->duration2					= result.GetInt32Str("duration2");
-			data->hit_bonus					= result.GetFloatStr("hit_bonus");
-			data->max_aoe_targets			= result.GetInt16Str("max_aoe_targets");
-			data->min_range					= result.GetFloatStr("min_range");
-			data->radius					= result.GetFloatStr("radius");
-			data->range						= result.GetFloatStr("range");
-			data->recast					= result.GetFloatStr("recast");
-			data->recovery					= result.GetFloatStr("recovery");
-			data->resistibility				= result.GetFloatStr("resistibility");
-			data->linked_timer				= result.GetInt32Str("linked_timer_id");
+					data->id = hash;
+					data->tier = 1;
+					data->name.data = spell_name;
 
-			/* Cast Messaging */
-			string message					= result.GetStringStr("success_message");
-			if( message.length() > 0 )
-				data->success_message = message;
+					if (level_data->at(spell_id).size() > 1 && spell_num > 1) {
+						data->name.data += " " + int_to_roman(spell_num);
+					}
 
-			message							= result.GetStringStr("fade_message");
-			if( message.length() > 0 )
-				data->fade_message = string(message);
+					data->name.size = data->name.data.length();
+					data->description.data = result.GetStringStr("description");
+					data->description.size = data->description.data.length();
+					data->icon = result.GetSInt16Str("icon");
+					data->icon_heroic_op = result.GetInt16Str("icon_heroic_op");
+					data->icon_backdrop = result.GetInt16Str("icon_backdrop");
+					data->spell_visual = result.GetInt32Str("spell_visual");
+					data->type = result.GetInt16Str("type");
+					data->target_type = result.GetInt8Str("target_type");
+					data->cast_type = result.GetInt8Str("cast_type");
+					data->spell_book_type = result.GetInt32Str("spell_book_type");
+					data->det_type = result.GetInt8Str("det_type");
+					data->incurable = (result.GetInt8Str("incurable") == 1);
+					data->control_effect_type = result.GetInt8Str("control_effect_type");
+					data->casting_flags = result.GetInt32Str("casting_flags");
+					data->savage_bar = result.GetInt8Str("savage_bar");
+					data->savage_bar_slot = result.GetInt8Str("savage_bar_slot");
+					data->spell_type = result.IsNullStr("spell_type") ? 0 : result.GetInt8Str("spell_type");
 
-			message							= result.GetStringStr("effect_message");
-			if( message.length() > 0 )
-				data->effect_message = string(message);
+					/* Toggles */
+					data->interruptable = (result.GetInt8Str("interruptable") == 1);
+					data->duration_until_cancel = (result.GetInt8Str("duration_until_cancel") == 1);
+					data->can_effect_raid = result.GetInt8Str("can_effect_raid");
+					data->affect_only_group_members = result.GetInt8Str("affect_only_group_members");
+					data->display_spell_tier = result.GetInt8Str("display_spell_tier");
+					data->friendly_spell = result.GetInt8Str("friendly_spell");
+					data->group_spell = result.GetInt8Str("group_spell");
+					data->is_active = result.GetInt8Str("is_active");
+					data->persist_though_death = (result.GetInt8Str("persist_through_death") == 1);
+					data->cast_while_moving = (result.GetInt8Str("cast_while_moving") == 1);
+					data->not_maintained = (result.GetInt8Str("not_maintained") == 1);
 
-			string lua_script				= result.GetStringStr("lua_script");
-			if( lua_script.length() > 0 )
-				data->lua_script = string(lua_script);
+					/* Skill Requirements */
+					data->class_skill = result.GetInt32Str("class_skill");
+					data->mastery_skill = result.GetInt32Str("mastery_skill");
+					// no min_class_skill_req?
 
+					/* Cost  */
+					data->req_concentration = result.GetInt16Str("req_concentration");
+					data->hp_req = result.GetInt16Str("hp_req");
+					data->hp_upkeep = result.GetInt16Str("hp_upkeep");
+					data->hp_req_percent = result.GetInt8Str("hp_req_percent");
+					data->power_req = 0; //result.GetInt16Str("power_req");
+					data->power_upkeep = result.GetInt16Str("power_upkeep");
+					data->power_req_percent = result.GetInt8Str("power_req_percent");
+					data->savagery_req = result.GetInt16Str("savagery_req");
+					data->savagery_upkeep = result.GetInt16Str("savagery_upkeep");
+					data->savagery_req_percent = result.GetInt8Str("savagery_req_percent");
+					data->dissonance_req = result.GetInt16Str("dissonance_req");
+					data->dissonance_upkeep = result.GetInt16Str("dissonance_upkeep");
+					data->dissonance_req_percent = result.GetInt8Str("dissonance_req_percent");
 
-			/* Load spell level data */
-			spell = new Spell(data);
+					/* Spell Parameters */
+					data->call_frequency = result.GetInt32Str("call_frequency");
+					data->cast_time = result.GetInt16Str("cast_time");
+					data->duration1 = result.GetInt32Str("duration1");
+					data->duration2 = result.GetInt32Str("duration2");
+					data->hit_bonus = result.GetFloatStr("hit_bonus");
+					data->max_aoe_targets = result.GetInt16Str("max_aoe_targets");
+					data->min_range = result.GetFloatStr("min_range");
+					data->radius = result.GetFloatStr("radius");
+					data->range = result.GetFloatStr("range");
+					data->recast = result.GetFloatStr("recast");
+					data->recovery = result.GetFloatStr("recovery");
+					data->resistibility = result.GetFloatStr("resistibility");
+					data->linked_timer = result.GetInt32Str("linked_timer_id");
 
-			if(level_data && level_data->count(data->id) > 0)
-			{
-				vector<LevelArray*>* level_array = &((*level_data)[data->id]);
+					/* Cast Messaging */
+					string message = result.GetStringStr("success_message");
+					if (message.length() > 0)
+						data->success_message = message;
 
-				for(int8 i=0; i<level_array->size(); i++)
-				{
-					spell->AddSpellLevel(level_array->at(i)->adventure_class, level_array->at(i)->tradeskill_class, level_array->at(i)->spell_level*10);
+					message = result.GetStringStr("fade_message");
+					if (message.length() > 0)
+						data->fade_message = string(message);
+
+					message = result.GetStringStr("effect_message");
+					if (message.length() > 0)
+						data->effect_message = string(message);
+
+					string lua_script = result.GetStringStr("lua_script");
+					if (lua_script.length() > 0)
+						data->lua_script = string(lua_script);
+
+					Spell* spell = new Spell(data);
+
+					for (auto lua_datum : lua_data) {
+						if (lua_datum->is_scaling) {
+							spell->AddSpellLuaData(lua_datum->type, lua_datum->int_value * spell_level->spell_level, lua_datum->float_value * spell_level->spell_level, lua_datum->bool_value, lua_datum->string_value);
+						} else {
+							spell->AddSpellLuaData(lua_datum->type, lua_datum->int_value, lua_datum->float_value, lua_datum->bool_value, lua_datum->string_value);
+						}
+					}
+
+					for (const auto spell_display_effect : spell_display_effects) {
+						string description = spell_display_effect->description;
+
+						for (int i = 0; i <= 15; i++) {
+							string search = "%" + to_string(i + 1);
+
+							if (description.find(search) != string::npos && (spell->GetLUAData()->at(i) && (spell->GetLUAData()->at(i)->type == 0) || (spell->GetLUAData()->at(i)->type == 1))) {
+								if (spell->GetLUAData()->at(i)->type == 0) {
+									description.replace(description.find(search), search.length(), to_string(spell->GetLUAData()->at(i)->int_value));
+								} else {
+									description.replace(description.find(search), search.length(), to_string(static_cast<int>(spell->GetLUAData()->at(i)->float_value)));
+								}
+							}
+						}
+
+						spell->AddSpellEffect(spell_display_effect->percentage, spell_display_effect->subbullet, description);
+					}
+
+					spell->AddSpellLevel(spell_level->adventure_class, spell_level->tradeskill_class, spell_level->spell_level * 10);
+
+					master_spell_list.AddSpell(hash, 1, spell);
 				}
 			}
-
-
-			/* Add spell to master list */
-			master_spell_list.AddSpell(data->id, data->tier, spell);
-			total++;
-
-			if( lua_script.length() > 0 )
-				LogWrite(SPELL__DEBUG, 5, "Spells", "\t%i. %s (Tier: %i) - '%s'", spell_id, spell_name.c_str(), data->tier, lua_script.c_str()); 		
-			else if(data->is_active)
-				LogWrite(SPELL__WARNING, 1, "Spells", "\tSpell %s (%u, Tier: %i) set 'Active', but missing LUAScript", spell_name.c_str(), spell_id, data->tier);
-
-		} // end while
-	} // end else
-	
-	LogWrite(SPELL__DEBUG, 0, "Spells", "Loading Spell Effects...");
-	LoadSpellEffects();
-
-	LogWrite(SPELL__DEBUG, 0, "Spells", "Loading Spell LUA Data...");
-	LoadSpellLuaData();
+		}
+	}
 	
 	if(lua_interface) 
 	{
@@ -4297,51 +4331,51 @@ void WorldDatabase::LoadSpells()
 	}
 
 	if (level_data) {
-		map<int32, vector<LevelArray*> >::iterator map_itr;
-		vector<LevelArray*>::iterator level_itr;
-
-		for(map_itr = level_data->begin(); map_itr != level_data->end(); map_itr++)
-		{
-			for(level_itr = map_itr->second.begin(); level_itr != map_itr->second.end(); level_itr++)
-			{
-				safe_delete(*level_itr);
+		for (auto levels : *level_data) {
+			for (auto spell_level : levels.second) {
+				safe_delete(spell_level);
 			}
 		}
-	}
 
-	safe_delete(level_data);
+		safe_delete(level_data);
+	}
 
 	LogWrite(SPELL__INFO, 0, "Spells", "Loaded %u Spell%s (took %u seconds)", total, total == 1 ? "" : "s", Timer::GetUnixTimeStamp() - t_now);
 }
 
-void WorldDatabase::LoadSpellLuaData(){
-	Spell *spell;
-	Query query;
-	MYSQL_ROW row;
-	int32 total = 0;
-	MYSQL_RES *result = query.RunQuery2(Q_SELECT, "SELECT `spell_id`,`tier`,`value_type`,`value` "
-												  "FROM `spell_data` "
-												  "ORDER BY `index_field`");
+vector<LUAData*> WorldDatabase::LoadSpellLuaData(int32 spell_id) {
+	DatabaseResult result;
+	vector<LUAData*> lua_data;
 
-	while (result && (row = mysql_fetch_row(result))) {
-		if ((spell = master_spell_list.GetSpell(atoul(row[0]), atoi(row[1]))) && row[2] && row[3]) {
+	if (database_new.Select(&result, "SELECT value_type, value, is_scaling FROM spell_data WHERE spell_id = %u ORDER BY index_field", spell_id)) {
+		while (result.Next()) {
+			LUAData* data = new LUAData;
+			data->int_value = 0;
+			data->float_value = 0;
+			data->bool_value = false;
+			data->is_scaling = result.GetInt8Str("is_scaling") == 0 ? false : true;
 
-			LogWrite(SPELL__DEBUG, 5, "Spells", "\tLoading Spell LUA Data for spell_id: %u", atoul(row[0]));
+			const char* type = result.GetStringStr("value_type");
 
-			if (!strcmp(row[2], "INT"))
-				spell->AddSpellLuaDataInt(atoi(row[3]));
-			else if (!strcmp(row[2], "FLOAT"))
-				spell->AddSpellLuaDataFloat(atof(row[3]));
-			else if (!strcmp(row[2], "BOOL"))
-				spell->AddSpellLuaDataBool(!(strncasecmp(row[3], "true", 4)));
-			else if (!strcmp(row[2], "STRING"))
-				spell->AddSpellLuaDataString(string(row[3]));
-			else
-				LogWrite(SPELL__ERROR, 0, "Spells", "Invalid Lua Spell data '%s' for Spell ID: %u", row[2], spell->GetSpellID());
-			total++;
+			if (!strcmp(type, "INT")) {
+				data->type = 0;
+				data->int_value = result.GetInt32Str("value");
+			} else if (!strcmp(type, "FLOAT")) {
+				data->type = 1;
+				data->float_value = result.GetFloatStr("value");
+			} else if (!strcmp(type, "BOOL")) {
+				data->type = 2;
+				data->bool_value = result.GetInt32Str("value") == 0 ? false : true;
+			} else if (!strcmp(type, "STRING")) {
+				data->type = 3;
+				data->string_value = result.GetStringStr("value");
+			}
+
+			lua_data.push_back(data);
 		}
 	}
-	LogWrite(SPELL__DEBUG, 0, "Spells", "\tLoaded %i Spell LUA Data entr%s.", total, total == 1 ? "y" : "ies");
+
+	return lua_data;
 }
 
 void WorldDatabase::LoadSpellEffects() {
@@ -4363,6 +4397,23 @@ void WorldDatabase::LoadSpellEffects() {
 		}
 	}
 	LogWrite(SPELL__DEBUG, 0, "Spells", "\tLoaded %u Spell Effect%s.", total, total == 1 ? "" : "s");
+}
+
+vector<SpellDisplayEffect*> WorldDatabase::LoadSpellEffect(int32 spell_id) {
+	DatabaseResult result;
+	vector<SpellDisplayEffect*> spell_effects;
+
+	if (database_new.Select(&result, "SELECT percentage, bullet, description FROM spell_display_effects WHERE spell_id = %u", spell_id)) {
+		while (result.Next()) {
+			SpellDisplayEffect* spell_display_effect = new SpellDisplayEffect();
+			spell_display_effect->description = result.GetStringStr("description");
+			spell_display_effect->percentage = result.GetInt8Str("percentage");
+			spell_display_effect->subbullet = result.GetInt8Str("bullet");
+			spell_effects.push_back(spell_display_effect);
+		}
+	}
+
+	return spell_effects;
 }
 
 int32 WorldDatabase::LoadPlayerSkillbar(Client* client){

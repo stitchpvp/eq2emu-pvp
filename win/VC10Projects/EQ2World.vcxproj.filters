@@ -939,5 +939,8 @@
     <ClInclude Include="..\..\source\WorldServer\MasterServer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\common\picosha.h">
+      <Filter>Common Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

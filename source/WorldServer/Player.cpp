@@ -1634,7 +1634,7 @@ EQ2Packet* Player::GetQuickbarPacket(int16 version){
 
 void Player::AddSpellBookEntry(int32 spell_id, int8 tier, sint32 slot, int32 type, int32 timer, bool save_needed){
 	SpellBookEntry* spell = new SpellBookEntry;
-	spell->status = 0;
+	spell->status = SPELL_STATUS_LEARNED + SPELL_STATUS_ENABLED;
 	spell->slot = slot;
 	spell->spell_id = spell_id;
 	spell->type = type;
@@ -1747,11 +1747,6 @@ void Player::LockAllSpells() {
 void Player::UnlockAllSpells(bool first_load) {
 	MSpellsBook.writelock(__FUNCTION__, __LINE__);
 	for (auto entry : spells) {
-		if (first_load) {
-			AddSpellStatus(entry, SPELL_STATUS_ENABLED);
-			AddSpellStatus(entry, SPELL_STATUS_LEARNED);
-		}
-
 		if (entry->type != SPELL_BOOK_TYPE_TRADESKILL && entry->recast_available < Timer::GetCurrentTime2()) {
 			Spell* spell = master_spell_list.GetSpell(entry->spell_id, entry->tier);
 

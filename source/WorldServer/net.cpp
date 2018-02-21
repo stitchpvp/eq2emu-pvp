@@ -447,7 +447,7 @@ int main(int argc, char** argv) {
 				InterserverTimer.Start();
 				database.ping();
 
-				if (!master_server.Connected() && master_server.Connect()) {
+				if (getenv("MASTER_SERVER_ENABLED") == "true" && !master_server.Connected() && master_server.Connect()) {
 					LogWrite(WORLD__INFO, 0, "Master", "Connected to Master Server");
 					master_server.SayHello();
 				}

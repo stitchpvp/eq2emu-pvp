@@ -536,6 +536,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\source\common\DatabaseNew.h" />
     <ClInclude Include="..\..\source\common\DatabaseResult.h" />
+    <ClInclude Include="..\..\source\common\picosha.h" />
     <ClInclude Include="..\..\source\LUA\lapi.h" />
     <ClInclude Include="..\..\source\LUA\lauxlib.h" />
     <ClInclude Include="..\..\source\LUA\lcode.h" />

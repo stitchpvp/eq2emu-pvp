@@ -197,8 +197,7 @@ struct LUAData{
 	bool	bool_value;
 	float	float_value;
 	string	string_value;
-	sint32	int_value2;
-	float	float_value2;
+	bool  is_scaling;
 };
 struct SpellScriptTimer {
 	LuaSpell*		spell;
@@ -281,7 +280,6 @@ struct SpellData{
 	bool    not_maintained;
 	int8	savage_bar;
 	int8	savage_bar_slot;
-	int32	soe_spell_crc;
 	int8	spell_type;
 };
 class Spell{

@@ -654,7 +654,6 @@ void MasterSpellList::AddSpell(int32 id, int8 tier, Spell* spell){
 	MMasterSpellList.lock();
 	spell_list[id][tier] = spell;
 	spell_name_map[spell->GetName()] = spell;
-	spell_soecrc_map[spell->GetSpellData()->soe_spell_crc] = spell;
 	MMasterSpellList.unlock();
 }
 

@@ -315,7 +315,8 @@ public:
 	void	LoadEntityCommands(ZoneServer* zone);
 	void	LoadSpells();
 	void	LoadSpellEffects();
-	void	LoadSpellLuaData();
+	vector<SpellDisplayEffect*>	LoadSpellEffect(int32 spell_id);
+	vector<LUAData*> LoadSpellLuaData(int32 spell_id);
 	void	LoadTraits();
 	int32	LoadPlayerSkillbar(Client* client);
 	string	GetColumnNames(char* name);
@@ -556,6 +557,18 @@ public:
 	string				GetBotList(int32 char_id);
 	void				DeleteBot(int32 char_id, int32 bot_index);
 	void				SetBotStartingItems(Bot* bot, int8 class_id, int8 race_id);
+
+	// shamelessly copied from https://stackoverflow.com/questions/19266018/converting-integer-to-roman-numeral
+	string int_to_roman(int a)
+	{
+		string ans;
+		string M[] = { "","M","MM","MMM" };
+		string C[] = { "","C","CC","CCC","CD","D","DC","DCC","DCCC","CM" };
+		string X[] = { "","X","XX","XXX","XL","L","LX","LXX","LXXX","XC" };
+		string I[] = { "","I","II","III","IV","V","VI","VII","VIII","IX" };
+		ans = M[a / 1000] + C[(a % 1000) / 100] + X[(a % 100) / 10] + I[(a % 10)];
+		return ans;
+	}
 
 private:
 	DatabaseNew			database_new;
