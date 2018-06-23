@@ -479,6 +479,8 @@ public:
 
 	void Command_KnowledgeWindow_Sort(const shared_ptr<Client>& client, Seperator* sep);
 	void Command_Heal(const shared_ptr<Client>& client);
+	void Command_Target(const shared_ptr<Client>& client, Seperator* sep);
+	void Command_Assist(const shared_ptr<Client>& client, Seperator* sep);
 
 private:
 	RemoteCommands* remote_commands;
@@ -860,6 +862,9 @@ private:
 #define COMMAND_ACCEPT_RESURRECTION     312
 #define COMMAND_DECLINE_RESURRECTION    313
 #define COMMAND_WIND					314
+
+#define COMMAND_TARGET					315
+#define COMMAND_ASSIST					316
 
 #define COMMAND_BOT						500
 #define COMMAND_BOT_CREATE				501

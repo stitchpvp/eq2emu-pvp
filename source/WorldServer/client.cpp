@@ -2978,6 +2978,28 @@ bool Client::GotoSpawn(const char* search_name){
 		return true;
 }
 
+void Client::Target(const char* search_name) {
+	if (search_name) {
+		Spawn* target = GetCurrentZone()->FindSpawn(GetPlayer(), search_name);
+
+		if (target && GetPlayer()->WasSentSpawn(target->GetID()) && !GetPlayer()->WasSpawnRemoved(target)) {
+			TargetSpawn(target);
+		}
+	}
+}
+
+void Client::Assist(const char* search_name) {
+	if (search_name) {
+		Spawn* target = GetCurrentZone()->FindSpawn(GetPlayer(), search_name);
+
+		if (target && GetPlayer()->WasSentSpawn(target->GetID()) && !GetPlayer()->WasSpawnRemoved(target)) {
+			TargetSpawn(target->GetTarget());
+		}
+	} else if (GetPlayer()->GetTarget()) {
+		TargetSpawn(GetPlayer()->GetTarget()->GetTarget());
+	}
+}
+
 bool Client::CheckZoneAccess(const char* zoneName) {
 
 	LogWrite(CCLIENT__DEBUG, 0, "Client", "Zone access check for %s (%u), client: %u",zoneName, database.GetZoneID(zoneName), GetVersion());

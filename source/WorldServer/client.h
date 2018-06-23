@@ -180,6 +180,8 @@ public:
 	bool	Summon(const char* search_name);
 	bool	TryZoneInstance(int32 zoneID, bool zone_coords_valid=false);
 	bool	GotoSpawn(const char* search_name);
+	void Target(const char* search_name);
+	void Assist(const char* search_name);
 	void	DisplayDeadWindow();
 	void	HandlePlayerRevive(int32 point_id);
 	void	Bank(Spawn* banker, bool cancel = false);

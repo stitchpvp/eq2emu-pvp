@@ -3712,6 +3712,8 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, const shared
 		case COMMAND_RESET_ENCOUNTER    : { Command_ResetEncounter(client); break; }
 		case COMMAND_KNOCKBACK			: { Command_Knockback(client, sep);  break; }
 		case COMMAND_HEAL				: { Command_Heal(client);  break; }
+		case COMMAND_TARGET				: { Command_Target(client, sep); break; }
+		case COMMAND_ASSIST				: { Command_Assist(client, sep); break; }
 
 		case COMMAND_BOT				: { Command_Bot(client, sep); break; }
 		case COMMAND_BOT_CREATE			: { Command_Bot_Create(client, sep); break; }
@@ -8500,4 +8502,26 @@ void Commands::Command_Heal(const shared_ptr<Client>& client) {
 
 	if (power_amount > 0)
 		client->GetPlayer()->ProcHeal(player, "Power", power_amount, power_amount, "Dev Heal");
+}
+
+void Commands::Command_Target(const shared_ptr<Client>& client, Seperator* sep) {
+	const char* search_name = nullptr;
+
+	if (sep && sep->IsSet(0)) {
+		search_name = sep->argplus[0];
+	}
+
+	if (search_name) {
+		client->Target(search_name);
+	}
+}
+
+void Commands::Command_Assist(const shared_ptr<Client>& client, Seperator* sep) {
+	const char* search_name = nullptr;
+
+	if (sep && sep->IsSet(0)) {
+		search_name = sep->argplus[0];
+	}
+
+	client->Assist(search_name);
 }
