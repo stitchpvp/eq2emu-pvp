@@ -329,8 +329,6 @@ void PlayerInfo::SetAccountAge(int16 age){
 }
 
 EQ2Packet* PlayerInfo::serialize(int16 version){
-	player->CalculateBonuses();
-
 	PacketStruct* packet = nullptr;
 
 	if (player->packet_cache.count("WS_CharacterSheet") > 0) {
@@ -972,6 +970,7 @@ vector<EQ2Packet*>	Player::UnequipItem(int16 index, sint32 bag_id, int8 slot, in
 			}
 			equipment_list.RemoveItem(index);
 			packets.push_back(equipment_list.serialize(version, this));
+			CalculateBonuses();
 			SetCharSheetChanged(true);
 			SetEquipment(0, old_slot);
 		}
@@ -1006,6 +1005,7 @@ vector<EQ2Packet*>	Player::UnequipItem(int16 index, sint32 bag_id, int8 slot, in
 			to_item->save_needed = true;
 			packets.push_back(to_item->serialize(version, false));
 			SetEquipment(to_item);
+			CalculateBonuses();
 			item->details.inv_slot_id = bag_id;
 			item->details.slot_id = slot;
 			item_list.AddItem(item);
@@ -1025,6 +1025,7 @@ vector<EQ2Packet*>	Player::UnequipItem(int16 index, sint32 bag_id, int8 slot, in
 						lua_interface->RunItemScript(item->GetItemScript(), "unequipped", item, this);
 
 					equipment_list.RemoveItem(index);
+					CalculateBonuses();
 					item->details.inv_slot_id = to_item->details.bag_id;
 					item->details.slot_id = i;
 					item_list.AddItem(item);
@@ -1081,6 +1082,7 @@ vector<EQ2Packet*>	Player::UnequipItem(int16 index, sint32 bag_id, int8 slot, in
 					item->details.inv_slot_id = bag_id;
 					item->details.slot_id = slot;
 					item_list.AddItem(item);
+					CalculateBonuses();
 					item->save_needed = true;
 					packets.push_back(equipment_list.serialize(version));
 					packets.push_back(item->serialize(version, false));
@@ -1100,6 +1102,7 @@ vector<EQ2Packet*>	Player::UnequipItem(int16 index, sint32 bag_id, int8 slot, in
 					item->details.inv_slot_id = bag_id;
 					item->details.slot_id = slot;
 					item_list.AddItem(item);
+					CalculateBonuses();
 					item->save_needed = true;
 					packets.push_back(equipment_list.serialize(version));
 					packets.push_back(item->serialize(version, false));
@@ -1247,9 +1250,6 @@ vector<EQ2Packet*> Player::EquipItem(int16 index, int16 version, int8 slot_id){
 			if (item->generic_info.condition == 0) {
 				shared_ptr<Client> client = GetZone()->GetClientBySpawn(this);
 				if (client) {
-
-					LogWrite(MISC__TODO, 1, "TODO", "Send popup text in red 'Some of your equipment is broken!'\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
-
 					client->Message(CHANNEL_COLOR_RED, "Your \\aITEM %u %u:%s\\/a is worn out and will not be effective until repaired.", item->details.item_id, item->details.unique_id, item->name.c_str());
 				}
 			}
@@ -1261,6 +1261,7 @@ vector<EQ2Packet*> Player::EquipItem(int16 index, int16 version, int8 slot_id){
 				if(bag_packet)
 					packets.push_back(bag_packet);
 			}
+			CalculateBonuses();
 			SetCharSheetChanged(true);
 		}
 	}
@@ -2104,7 +2105,8 @@ void Player::AddMaintainedSpell(shared_ptr<LuaSpell> luaspell){
 		else
 			effect->expire_timestamp = Timer::GetCurrentTime2() + (spell->GetSpellDuration()*100);
 		GetMaintainedMutex()->releasewritelock(__FUNCTION__, __LINE__);
-		charsheet_changed = true;
+
+		SetCharSheetChanged(true);
 	}
 }
 void Player::AddSpellEffect(shared_ptr<LuaSpell> luaspell) {
@@ -2141,10 +2143,9 @@ void Player::AddSpellEffect(shared_ptr<LuaSpell> luaspell) {
 
 		GetSpellEffectMutex()->releasewritelock(__FUNCTION__, __LINE__);
 
-		changed = true;
-		info_changed = true;
-		charsheet_changed = true;
-		AddChangedZoneSpawn();
+		AddSpawnUpdate(true, false, false);
+
+		SetCharSheetChanged(true);
 	}	
 }
 
@@ -2189,12 +2190,13 @@ void Player::RemoveMaintainedSpell(shared_ptr<LuaSpell> luaspell){
 		memset(&GetInfoStruct()->maintained_effects[29], 0, sizeof(MaintainedEffects));
 		GetInfoStruct()->maintained_effects[29].spell_id = 0xFFFFFFFF;
 		GetInfoStruct()->maintained_effects[29].icon = 0xFFFF;
-		charsheet_changed = true;
+
+		SetCharSheetChanged(true);
 	}
 	GetMaintainedMutex()->releasewritelock(__FUNCTION__, __LINE__);
 }
 
-void Player::RemoveSpellEffect(shared_ptr<LuaSpell> spell){
+void Player::RemoveSpellEffect(shared_ptr<LuaSpell> spell) {
 	bool found = false;
 
 	GetSpellEffectMutex()->writelock(__FUNCTION__, __LINE__);
@@ -2217,10 +2219,9 @@ void Player::RemoveSpellEffect(shared_ptr<LuaSpell> spell){
 	GetSpellEffectMutex()->releasewritelock(__FUNCTION__, __LINE__);
 
 	if (found) {
-		changed = true;
-		info_changed = true;
-		charsheet_changed = true;
-		AddChangedZoneSpawn();
+		AddSpawnUpdate(true, false, false);
+
+		SetCharSheetChanged(true);
 	}
 }
 
@@ -2629,8 +2630,9 @@ void Player::set_character_flag(int flag){
 	if (flag > CF_MAXIMUM_FLAG) return;
 	if (flag < 32) GetInfoStruct()->flags |= (1 << flag);
 	else GetInfoStruct()->flags2 |= (1 << (flag - 32));
-	charsheet_changed = true;
-	info_changed = true;
+
+	SetCharSheetChanged(true);
+	AddSpawnUpdate(true, false, false);
 
 	LogWrite(PLAYER__DEBUG, 0, "Player", "Flags after: %u, Flags2: %u", GetInfoStruct()->flags, GetInfoStruct()->flags2);
 }
@@ -2642,8 +2644,9 @@ void Player::reset_character_flag(int flag){
 	if (flag > CF_MAXIMUM_FLAG) return;
 	if (flag < 32) GetInfoStruct()->flags &= ~(1 << flag);
 	else GetInfoStruct()->flags2 &= ~(1 << (flag - 32));
-	charsheet_changed = true;
-	info_changed = true;
+
+	SetCharSheetChanged(true);
+	AddSpawnUpdate(true, false, false);
 
 	LogWrite(PLAYER__DEBUG, 0, "Player", "Flags after: %u, Flags2: %u", GetInfoStruct()->flags, GetInfoStruct()->flags2);
 }
@@ -2655,8 +2658,9 @@ void Player::toggle_character_flag(int flag){
 	if (flag > CF_MAXIMUM_FLAG) return;
 	if (flag < 32) GetInfoStruct()->flags ^= (1 << flag);
 	else GetInfoStruct()->flags2 ^= (1 << (flag - 32));
-	charsheet_changed = true;
-	info_changed = true;
+
+	SetCharSheetChanged(true);
+	AddSpawnUpdate(true, false, false);
 
 	LogWrite(PLAYER__DEBUG, 0, "Player", "Flags after: %u, Flags2: %u", GetInfoStruct()->flags, GetInfoStruct()->flags2);
 }
@@ -3774,9 +3778,7 @@ void Player::AddActivityStatus(shared_ptr<ActivityStatus> status) {
 	if (!HasActivityStatus(status->status)) {
 		activity_statuses.push_back(status);
 
-		changed = true;
-		info_changed = true;
-		GetZone()->AddChangedSpawn(this);
+		AddSpawnUpdate(true, false, false);
 	}
 }
 
@@ -3802,9 +3804,7 @@ void Player::CheckActivityStatuses() {
 
 			status = activity_statuses.erase(status);
 
-			changed = true;
-			info_changed = true;
-			GetZone()->AddChangedSpawn(this);
+			AddSpawnUpdate(true, false, false);
 		} else {
 			++status;
 		}
@@ -3813,47 +3813,56 @@ void Player::CheckActivityStatuses() {
 
 void Player::SetPVPImmune(bool val) {
 	pvp_immune = val;
-	changed = true;
-	vis_changed = true;
+
+	AddSpawnUpdate(false, false, true);
 	
 	SetResendSpawns(true);
 }
 
-void Player::AddCoins(int64 val){
+void Player::AddCoins(int64 val) {
 	int32 tmp = 0;
+
 	UpdatePlayerStatistic(STAT_PLAYER_TOTAL_WEALTH, (GetCoinsCopper() + (GetCoinsSilver() * 100) + (GetCoinsGold() * 10000) + (GetCoinsPlat() * 1000000)) + val, true);
-	if(val >= 1000000){
+
+	if (val >= 1000000) {
 		tmp = val / 1000000;
-		val -= tmp*1000000;
+		val -= tmp * 1000000;
 		GetInfoStruct()->coin_plat += tmp;
 	}
-	if(val >= 10000){
+
+	if (val >= 10000) {
 		tmp = val / 10000;
-		val -= tmp*10000;
+		val -= tmp * 10000;
 		GetInfoStruct()->coin_gold += tmp;
 	}
-	if(val >= 100){
+
+	if (val >= 100) {
 		tmp = val / 100;
-		val -= tmp*100;
+		val -= tmp * 100;
 		GetInfoStruct()->coin_silver += tmp;
 	}
+
 	GetInfoStruct()->coin_copper += val;
-	if(GetInfoStruct()->coin_copper >= 100){
+
+	if (GetInfoStruct()->coin_copper >= 100) {
 		tmp = GetInfoStruct()->coin_copper/100;
 		GetInfoStruct()->coin_copper -= 100 * tmp;
 		GetInfoStruct()->coin_silver += tmp;
 	}
-	if(GetInfoStruct()->coin_silver >= 100){
+
+	if (GetInfoStruct()->coin_silver >= 100) {
 		tmp = GetInfoStruct()->coin_silver/100;
 		GetInfoStruct()->coin_silver -= 100 * tmp;
 		GetInfoStruct()->coin_gold += tmp;
 	}
-	if(GetInfoStruct()->coin_gold >= 100){
+
+	if (GetInfoStruct()->coin_gold >= 100) {
 		tmp = GetInfoStruct()->coin_gold/100;
 		GetInfoStruct()->coin_gold -= 100 * tmp;
 		GetInfoStruct()->coin_plat += tmp;
 	}
-	charsheet_changed = true;
+
+	SetCharSheetChanged(true);
 }
 
 bool Player::RemoveCoins(int64 val){
@@ -4498,9 +4507,12 @@ void Player::SetPlayerAdventureClass(int8 new_class){
 	GetInfoStruct()->class1 = classes.GetBaseClass(new_class);
 	GetInfoStruct()->class2 = classes.GetSecondaryBaseClass(new_class);
 	GetInfoStruct()->class3 = new_class;
-	charsheet_changed = true;
-	if(GetZone())
+
+	SetCharSheetChanged(true);
+
+	if (GetZone()) {
 		GetZone()->TriggerCharSheetTimer();
+	}
 }
 
 void Player::AddSkillBonus(int32 spell_id, int32 skill_id, float value) {
@@ -4889,66 +4901,80 @@ void Player::InitXPTable() {
 
 void Player::SendQuestRequiredSpawns(int32 quest_id){
 	bool locked = true;
+
 	m_playerSpawnQuestsRequired.readlock(__FUNCTION__, __LINE__);
+
 	if (player_spawn_quests_required.size() > 0) {
 		ZoneServer* zone = GetZone();
+
 		shared_ptr<Client> client = zone->GetClientBySpawn(this);
-		if (!client){
+
+		if (!client) {
 			m_playerSpawnQuestsRequired.releasereadlock(__FUNCTION__, __LINE__);
 			return;
 		}
-		if (player_spawn_quests_required.count(quest_id) > 0){
+
+		if (player_spawn_quests_required.count(quest_id) > 0) {
 			vector<int32> spawns = *player_spawn_quests_required[quest_id];
+
 			m_playerSpawnQuestsRequired.releasereadlock(__FUNCTION__, __LINE__);
-			Spawn* spawn = 0;
-			vector<int32>::iterator itr;
-			for (itr = spawns.begin(); itr != spawns.end();){
-				spawn = zone->GetSpawnByID(*itr);
-				if (spawn)
-					zone->SendSpawnChanges(spawn, client, false, true);
-				else {
+
+			for (auto itr = spawns.begin(); itr != spawns.end();){
+				Spawn* spawn = zone->GetSpawnByID(*itr);
+
+				if (spawn) {
+					zone->AddSpawnUpdate(spawn->GetID(), false, false, true, client);
+					++itr;
+				} else {
 					itr = spawns.erase(itr);
-					continue;
 				}
-				itr++;
 			}
 			locked = false;
 		}
 	}
-	if (locked)
+
+	if (locked) {
 		m_playerSpawnQuestsRequired.releasereadlock(__FUNCTION__, __LINE__);
+	}
 }
 
-void Player::SendHistoryRequiredSpawns(int32 event_id){
+void Player::SendHistoryRequiredSpawns(int32 event_id) {
 	bool locked = true;
+
 	m_playerSpawnHistoryRequired.readlock(__FUNCTION__, __LINE__);
+
 	if (player_spawn_history_required.size() > 0) {
 		ZoneServer* zone = GetZone();
 		shared_ptr<Client> client = zone->GetClientBySpawn(this);
-		if (!client){
+
+		if (!client) {
 			m_playerSpawnHistoryRequired.releasereadlock(__FUNCTION__, __LINE__);
 			return;
 		}
-		if (player_spawn_history_required.count(event_id) > 0){
+
+		if (player_spawn_history_required.count(event_id) > 0) {
 			vector<int32> spawns = *player_spawn_history_required[event_id];
+
 			m_playerSpawnHistoryRequired.releasereadlock(__FUNCTION__, __LINE__);
-			Spawn* spawn = 0;
-			vector<int32>::iterator itr;
-			for (itr = spawns.begin(); itr != spawns.end();){
-				spawn = zone->GetSpawnByID(*itr);
-				if (spawn)
-					zone->SendSpawnChanges(spawn, client, false, true);
-				else {
+
+			for (auto itr = spawns.begin(); itr != spawns.end();){
+				Spawn* spawn = zone->GetSpawnByID(*itr);
+
+				if (spawn) {
+					zone->AddSpawnUpdate(spawn->GetID(), false, false, true, client);
+					++itr;
+				} else {
 					itr = spawns.erase(itr);
-					continue;
 				}
-				itr++;
 			}
+
 			locked = false;
 		}
 	}
-	if (locked)
+
+	if (locked) {
 		m_playerSpawnHistoryRequired.releasereadlock(__FUNCTION__, __LINE__);
+	}
 }
 
 void Player::AddQuestRequiredSpawn(Spawn* spawn, int32 quest_id){

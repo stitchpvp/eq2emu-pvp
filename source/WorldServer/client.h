@@ -393,12 +393,18 @@ public:
 
 	atomic<bool> waiting_to_zone;
 
+	void SendSpawnChanges(bool only_pos_changes, bool only_players);
+	void AddChangedSpawn(shared_ptr<SpawnUpdate> spawn_update);
+	void RemoveChangedSpawn(int32 spawn_id);
+
 private:
 	void    SavePlayerImages();
 	void	SkillChanged(Skill* skill, int16 previous_value, int16 new_value);
 	void	GiveQuestReward(Quest* quest);
 	void	SetStepComplete(int32 quest_id, int32 step);
 	void	AddStepProgress(int32 quest_id, int32 step, int32 progress);
+	void SendSpawnChanges(vector<Spawn*>& spawns);
+
 	map<int32, map<int32, int32> > quest_pending_updates;
 	vector<QueuedQuest*> quest_queue;
 	vector<Quest*> quest_pending_reward;
@@ -484,6 +490,8 @@ private:
 
 	bool on_auto_mount;
 	bool EntityCommandPrecheck(Spawn* spawn, const char* command);
+
+	map<int32, shared_ptr<SpawnUpdate>> spawn_updates;
 };
 
 class ClientList {

@@ -621,6 +621,7 @@ void Client::SendZoneSpawns(){
 	//GetPlayer()->SortSpellBook();
 	ClientPacketFunctions::SendSkillSlotMappings(shared_from_this());
 	ClientPacketFunctions::SendGameWorldTime(shared_from_this());
+	GetCurrentZone()->AddToSpawnRangeMap(shared_from_this());
 	GetCurrentZone()->StartZoneInitialSpawnThread(shared_from_this());
 }
 
@@ -1208,37 +1209,10 @@ bool Client::HandlePacket(EQApplicationPacket *app) {
 			QueuePacket(app25);
 			break;
 									 }
-		case OP_ShowCreateFromRecipeUIMsg:{
+		case OP_ShowCreateFromRecipeUIMsg: {
 			LogWrite(OPCODE__DEBUG, 1, "Opcode", "Opcode 0x%X (%i): OP_ShowCreateFromRecipeUIMsg", opcode, opcode);
 			break;
-			/*uchar blah[] ={0x09,0x0e,0x00,0x51,0x75,0x65,0x65,0x6e,0x27,0x73,0x20,0x43,0x6f,0x6c,0x6f,0x6e
-			,0x79,0x00,0x00,0x00,0x00,0x40,0x40,0xff,0xff,0xff};
-			EQ2Packet* app = new EQ2Packet(OP_EncounterBrokenMsg, blah, sizeof(blah));
-			QueuePacket(app);
-
-			uchar blah2[] = {0x00,0x00,0xff,0xff,0xff,0xff};
-			app = new EQ2Packet(OP_CreateCharFromCBBRequestMsg, blah2, sizeof(blah2));
-			QueuePacket(app);
-
-			uchar blah3[] ={0x09,0x17,0x00,0x5c,0x23,0x46,0x46,0x45,0x34,0x30,0x30,0x20,0x51,0x75,0x65,0x65
-			,0x6e,0x27,0x73,0x20,0x43,0x6f,0x6c,0x6f,0x6e,0x79,0x00,0x00,0x00,0x00,0xa0,0x40
-			,0xff,0xff,0xff};
-			app = new EQ2Packet(OP_CreateCharFromCBBRequestMsg, blah3, sizeof(blah3));
-			QueuePacket(app);
-
-			uchar blah4[] ={0x0b,0x00,0x21,0x00,0x00,0x00,0x1d,0x81,0x42,0x17,0x81,0x42,0x17,0x81,0x42,0x17
-			,0x81,0x42,0x17,0x81,0x42,0x17,0x81,0x42,0x17,0x81,0x42,0x17,0x81,0x42,0x17,0x81
-			,0x42,0x17,0x81,0x42,0x17,0x81,0x42};
-			app = new EQ2Packet(OP_UpdateSpellBookMsg, blah4, sizeof(blah4));
-			QueuePacket(app);
-			uchar blah5[] ={0x00,0x00};
-			app = new EQ2Packet(OP_RecipeDetailsMsg, blah5, sizeof(blah5));
-			QueuePacket(app);
-			break;*/
-			//player->GetPlayerInfo()->GetInfo()->cur_power = 100;
-			//EQ2Packet* app = player->GetPlayerInfo()->serialize(1);
-			//QueuePacket(app);
-										  }
+		}
 		case OP_BeginItemCreationMsg: {
 			LogWrite(OPCODE__DEBUG, 1, "Opcode", "Opcode 0x%X (%i): OP_BeginItemCreationMsg", opcode, opcode);
 			//DumpPacket(app->pBuffer, app->size);
@@ -1437,9 +1411,6 @@ bool Client::HandlePacket(EQApplicationPacket *app) {
 				} else {
 					player->PrepareIncomingMovementPacket(app->size - offset, app->pBuffer + offset, version);
 				}
-
-				GetPlayer()->position_changed = true;
-				GetPlayer()->changed = true;
 			}
 			break;
 								  }
@@ -1848,11 +1819,8 @@ bool Client::HandlePacket(EQApplicationPacket *app) {
 				if (type == 0) {
 					if (player->custNPC) {
 						player->custNPCTarget->CustomizeAppearance(packet);
-						current_zone->SendSpawnChanges(player->custNPCTarget);
-					}
-					else {
+					} else {
 						player->CustomizeAppearance(packet);
-						current_zone->SendSpawnChanges(player);
 					}
 				}
 			}
@@ -1866,9 +1834,7 @@ bool Client::HandlePacket(EQApplicationPacket *app) {
 
 				player->custNPC = false;
 				player->custNPCTarget = 0;
-				player->changed = true;
-				player->info_changed = true;
-				current_zone->SendSpawnChanges(player, shared_from_this());
+				player->AddSpawnUpdate(true, false, false);
 			}
 
 			break;
@@ -2405,14 +2371,15 @@ bool Client::Process(bool zone_process) {
 	}
 
 	if (pos_update.Check() && GetPlayer()->position_changed) {
-		GetCurrentZone()->SendSpawnChanges(GetPlayer());
+		GetPlayer()->AddSpawnUpdate(false, true, false);
 		GetCurrentZone()->CheckTransporters(shared_from_this());
 	}
 
 	if (spawn_vis_update.Check() && GetPlayer()->GetResendSpawns()) {
-		GetCurrentZone()->StartZoneSpawnsForAggroThread(shared_from_this());
+		GetCurrentZone()->ResendSpawns(shared_from_this());
 		GetPlayer()->SetResendSpawns(false);
 	}
+
 	if(lua_interface && lua_debug && lua_debug_timer.Check())
 		lua_interface->UpdateDebugClients(shared_from_this());
 	if(quest_pos_timer.Check())
@@ -3431,7 +3398,7 @@ void Client::ChangeLevel(int16 old_level, int16 new_level){
 		level_update->setDataByName("new_level", new_level);
 		QueuePacket(level_update->serialize());
 		safe_delete(level_update);
-		GetCurrentZone()->StartZoneSpawnsForLevelThread(shared_from_this());
+		GetCurrentZone()->SendAllSpawnsForLevelChange(shared_from_this());
 	}
 
 	PacketStruct* command_packet=configReader.getStruct("WS_CannedEmote", GetVersion());
@@ -3532,7 +3499,7 @@ void Client::ChangeLevel(int16 old_level, int16 new_level){
 	// Need to send the trait list every time the players level changes
 	// Also need to force the char sheet update or else there can be a large delay from when you level
 	// to when you are actually able to select traits.
-	QueuePacket(GetPlayer()->GetPlayerInfo()->serialize(GetVersion()));
+	ClientPacketFunctions::SendCharacterSheet(shared_from_this());
 	QueuePacket(master_trait_list.GetTraitListPacket(shared_from_this()));
 	ClientPacketFunctions::SendSkillBook(shared_from_this());
 
@@ -3644,7 +3611,7 @@ void Client::ChangeTSLevel(int16 old_level, int16 new_level){
 	// Need to send the trait list every time the players level changes
 	// Also need to force the char sheet update or else there can be a large delay from when you level
 	// to when you are actually able to select traits.
-	QueuePacket(GetPlayer()->GetPlayerInfo()->serialize(GetVersion()));
+	ClientPacketFunctions::SendCharacterSheet(shared_from_this());
 	QueuePacket(master_trait_list.GetTraitListPacket(shared_from_this()));
 }
 
@@ -4243,23 +4210,29 @@ void Client::SetPlayerQuest(Quest* quest, map<int32, int32>* progress){
 
 }
 
-void Client::AddPlayerQuest(Quest* quest, bool call_accepted, bool send_packets){
-	if(player->player_quests.count(quest->GetQuestID()) > 0) {
-		if (player->player_quests[quest->GetQuestID()]->GetQuestFlags() > 0)
+void Client::AddPlayerQuest(Quest* quest, bool call_accepted, bool send_packets) {
+	if (player->player_quests.count(quest->GetQuestID()) > 0) {
+		if (player->player_quests[quest->GetQuestID()]->GetQuestFlags() > 0) {
 			quest->SetQuestFlags(player->player_quests[quest->GetQuestID()]->GetQuestFlags());
+		}
 
 		RemovePlayerQuest(quest->GetQuestID(), false, false);
 	}
+
 	player->player_quests[quest->GetQuestID()] = quest;
 	quest->SetPlayer(player);
 	current_quest_id = quest->GetQuestID();
-	if(send_packets && quest->GetQuestGiver() > 0)
-		GetCurrentZone()->SendSpawnChanges(quest->GetQuestGiver(), shared_from_this(), false, true);
-	if(lua_interface && call_accepted)
+
+	if (send_packets && quest->GetQuestGiver() > 0) {
+		GetCurrentZone()->AddSpawnUpdate(quest->GetQuestGiver(), false, false, true, shared_from_this());
+	}
+
+	if (lua_interface && call_accepted) {
 		lua_interface->CallQuestFunction(quest, "Accepted", player);
-	if(send_packets) {
+	}
+
+	if (send_packets) {
 		LogWrite(CCLIENT__DEBUG, 0, "Client", "Send Quest Journal...");
-		//SendQuestJournal();
 		SendQuestJournalUpdate(quest);
 
 		// sent twice to match live
@@ -4268,28 +4241,36 @@ void Client::AddPlayerQuest(Quest* quest, bool call_accepted, bool send_packets)
 		quest->SetTracked(true);
 		QueuePacket(quest->QuestJournalReply(GetVersion(), GetNameCRC(), player));
 	}
-	//This isn't during a load screen, so update spawns with required quests
-	if(call_accepted)
+
+	if (call_accepted) {
 		player->SendQuestRequiredSpawns(quest->GetQuestID());
+	}
 
 }
 
 void Client::RemovePlayerQuest(int32 id, bool send_update, bool delete_quest){
-	if(current_quest_id == id)
+	if (current_quest_id == id) {
 		current_quest_id = 0;
-	if(player->player_quests.count(id) > 0){
-		if(delete_quest){
+	}
+
+	if (player->player_quests.count(id) > 0) {
+		if (delete_quest) {
 			player->player_quests[id]->SetDeleted(true);
 			database.DeleteCharacterQuest(id, GetCharacterID(), player->GetCompletedPlayerQuests()->count(id) > 0);
 		}
-		if(send_update && player->player_quests[id]->GetQuestGiver() > 0)
-			GetCurrentZone()->SendSpawnChanges(player->player_quests[id]->GetQuestGiver(), shared_from_this(), false, true);
-		if(send_update) {
+
+		if (send_update && player->player_quests[id]->GetQuestGiver() > 0) {
+			GetCurrentZone()->AddSpawnUpdate(player->player_quests[id]->GetQuestGiver(), false, false, true, shared_from_this());
+		}
+
+		if (send_update) {
 			LogWrite(CCLIENT__DEBUG, 0, "Client", "Send Quest Journal...");
 			SendQuestJournal();
 		}
+
 		player->RemoveQuest(id, delete_quest);
-		if(send_update) {
+
+		if (send_update) {
 			LogWrite(CCLIENT__DEBUG, 0, "Client", "Send Quest Journal...");
 			SendQuestJournal();
 		}
@@ -4334,27 +4315,33 @@ void Client::SendQuestFailure(Quest* quest){
 
 }
 
-void Client::SendQuestUpdate(Quest* quest){
+void Client::SendQuestUpdate(Quest* quest) {
 	vector<QuestStep*>* updates = quest->GetQuestUpdates();
-	if(updates){
-		for(int32 i=0;i<updates->size();i++){
-			QuestStep* step = updates->at(i);
-			if(lua_interface && step->Complete() && quest->GetCompleteAction(step->GetStepID()))
+
+	if (updates) {
+		for (const auto& step : *updates) {
+			if (lua_interface && step->Complete() && quest->GetCompleteAction(step->GetStepID())) {
 				lua_interface->CallQuestFunction(quest, quest->GetCompleteAction(step->GetStepID()), player);
-			if(step->WasUpdated()){
+			}
+
+			if (step->WasUpdated()) {
 				SendQuestJournal();
 				QueuePacket(quest->QuestJournalReply(GetVersion(), GetNameCRC(), player, step));
 			}
-			LogWrite(CCLIENT__DEBUG, 0, "Client", "Send Quest Journal...");
-			
 		}
-		if(lua_interface && quest->GetCompleted() && quest->GetCompleteAction())
+
+		if (lua_interface && quest->GetCompleted() && quest->GetCompleteAction()) {
 			lua_interface->CallQuestFunction(quest, quest->GetCompleteAction(), player);
-		if(quest->GetCompleted()){
-			if (quest->GetQuestReturnNPC() > 0)
-				GetCurrentZone()->SendSpawnChanges(quest->GetQuestReturnNPC(), shared_from_this(), false, true);
-			if (quest->GetCompletedFlag())
+		}
+
+		if (quest->GetCompleted()) {
+			if (quest->GetQuestReturnNPC() > 0) {
+				GetCurrentZone()->AddSpawnUpdate(quest->GetQuestReturnNPC(), false, false, true, shared_from_this());
+			}
+
+			if (quest->GetCompletedFlag()) {
 				quest->SetCompletedFlag(false);
+			}
 		}
 
 		updates->clear();
@@ -4600,8 +4587,9 @@ void Client::DisplayRandomizeFeatures(int32 flags) {
 
 }
 
-void Client::GiveQuestReward(Quest* quest){
+void Client::GiveQuestReward(Quest* quest) {
 	current_quest_id = 0;
+
 	MPendingQuestAccept.lock();
 	pending_quest_accept.push_back(quest);
 	MPendingQuestAccept.unlock();
@@ -4611,68 +4599,95 @@ void Client::GiveQuestReward(Quest* quest){
 
 	LogWrite(CCLIENT__DEBUG, 0, "Client", "Send Quest Journal...");
 	SendQuestJournal();
+
 	player->RemoveQuest(quest->GetQuestID(), false);
 	DisplayQuestComplete(quest);
-	if(quest->GetExpReward() > 0){
+
+	if (quest->GetExpReward() > 0) {
 		int16 level = player->GetLevel();
 		int32 xp = quest->GetExpReward();
+
 		if (player->AddXP(xp)) {
 			Message(CHANNEL_COLOR_EXP, "You gain %u experience!",(int32)xp);
-			if(player->GetLevel() != level)
+
+			if (player->GetLevel() != level) {
 				ChangeLevel(level, player->GetLevel());
+			}
+
 			player->SetCharSheetChanged(true);
 		}
 	}
-	if(quest->GetTSExpReward() > 0){
+
+	if (quest->GetTSExpReward() > 0) {
 		int8 ts_level = player->GetTSLevel();
 		int32 xp = quest->GetTSExpReward();
+
 		if (player->AddTSXP(xp)) {
 			Message(CHANNEL_COLOR_EXP, "You gain %u tradeskill experience!",  (int32)xp);
-			if(player->GetTSLevel() != ts_level)
+
+			if (player->GetTSLevel() != ts_level) {
 				ChangeTSLevel(ts_level, player->GetTSLevel());
+			}
+
 			player->SetCharSheetChanged(true);
 		}
 	}
+
 	int64 total_coins = quest->GetGeneratedCoin();
-	if(total_coins > 0){
+
+	if (total_coins > 0) {
 		player->AddCoins(total_coins);
+
 		PlaySound("coin_cha_ching");
+
 		char tmp[64] = {0};
 		string message = "You receive ";
 		int32 val = 0;
-		if(total_coins >= 1000000){
+
+		if (total_coins >= 1000000) {
 			val = total_coins / 1000000;
 			total_coins -= 1000000 * val;
 			sprintf(tmp, "%u Platinum ", val);
 			message.append(tmp);
 			memset(tmp, 0, 64);
 		}
-		if(total_coins >= 10000){
+
+		if (total_coins >= 10000) {
 			val = total_coins / 10000;
 			total_coins -= 10000 * val;
 			sprintf(tmp, "%u Gold ", val);
 			message.append(tmp);
 			memset(tmp, 0, 64);
 		}
-		if(total_coins >= 100){
+
+		if (total_coins >= 100) {
 			val = total_coins / 100;
 			total_coins -= 100 * val;
 			sprintf(tmp, "%u Silver ", val);
 			message.append(tmp);
 			memset(tmp, 0, 64);
 		}
-		if(total_coins > 0){
+
+		if(total_coins > 0) {
 			sprintf(tmp, "%u Copper ", (int32)total_coins);
 			message.append(tmp);
 		}
+
 		message.append("for completing ").append(quest->GetName());
+
 		int8 type = CHANNEL_COLOR_LOOT;
-		if(GetVersion() >= 973)
+
+		if(GetVersion() >= 973) {
 			type = CHANNEL_COLOR_NEW_LOOT;
+		}
+
 		SimpleMessage(type, message.c_str());
 	}
-	if(quest->GetQuestGiver() > 0)
-		GetCurrentZone()->SendSpawnChanges(quest->GetQuestGiver(), shared_from_this(), false, true);
+
+	if (quest->GetQuestGiver() > 0) {
+		GetCurrentZone()->AddSpawnUpdate(quest->GetQuestGiver(), false, false, true, shared_from_this());
+	}
+
 	RemovePlayerQuest(quest->GetQuestID(), true, false);
 
 }
@@ -7794,4 +7809,227 @@ bool Client::EntityCommandPrecheck(Spawn* spawn, const char* command){
 		}
 	}
 	return should_use_spawn;
+}
+
+void Client::AddChangedSpawn(shared_ptr<SpawnUpdate> spawn_update) {
+	Spawn* spawn = GetCurrentZone()->GetSpawnByID(spawn_update->spawn_id);
+
+	if (spawn && GetPlayer()->WasSentSpawn(spawn_update->spawn_id) && !GetPlayer()->WasSpawnRemoved(spawn)) {
+		auto current_update = spawn_updates.find(spawn_update->spawn_id);
+
+		if (current_update != spawn_updates.end()) {
+			current_update->second->pos_changed |= spawn_update->pos_changed;
+			current_update->second->vis_changed |= spawn_update->vis_changed;
+			current_update->second->info_changed |= spawn_update->info_changed;
+		} else {
+			if (spawn == GetPlayer() && (!spawn_update->vis_changed && !spawn_update->info_changed)) {
+				return;
+			}
+
+			spawn_updates[spawn_update->spawn_id] = spawn_update;
+		}
+	}
+}
+
+void Client::RemoveChangedSpawn(int32 spawn_id) {
+	if (spawn_updates.count(spawn_id) > 0) {
+		spawn_updates.erase(spawn_id);
+	}
+}
+
+void Client::SendSpawnChanges(bool only_pos_changes, bool only_players) {
+	if (!ready_for_updates) {
+		return;
+	}
+
+	vector<Spawn*> spawns_to_send;
+	vector<shared_ptr<SpawnUpdate>> updates_to_keep;
+	int total_changes = 0;
+
+	for (const auto& kv : spawn_updates) {
+		shared_ptr<SpawnUpdate> spawn_update = kv.second;
+
+		Spawn* spawn = GetCurrentZone()->GetSpawnByID(spawn_update->spawn_id);
+
+		if (spawn && (!only_players || spawn->IsPlayer())) {
+			if (!only_pos_changes || spawn_update->pos_changed) {
+				spawn->position_changed = spawn_update->pos_changed;
+				spawn->info_changed = spawn_update->info_changed;
+				spawn->vis_changed = spawn_update->vis_changed;
+
+				if (spawn->position_changed) {
+					++total_changes;
+				}
+
+				if (spawn->info_changed) {
+					++total_changes;
+				}
+
+				if (spawn->vis_changed) {
+					++total_changes;
+				}
+
+				if (total_changes < 5) {
+					spawns_to_send.push_back(spawn);
+				} else {
+					updates_to_keep.push_back(spawn_update);
+				}
+			} else {
+				updates_to_keep.push_back(spawn_update);
+			}
+
+			if (total_changes >= 5) {
+				SendSpawnChanges(spawns_to_send);
+
+				spawns_to_send.clear();
+				total_changes = 0;
+			}
+		} else if (spawn) {
+			updates_to_keep.push_back(spawn_update);
+		}
+	}
+
+	spawn_updates.clear();
+
+	if (spawns_to_send.size() > 0) {
+		SendSpawnChanges(spawns_to_send);
+	}
+
+	for (const auto update : updates_to_keep) {
+		spawn_updates[update->spawn_id] = update;
+	}
+}
+
+void Client::SendSpawnChanges(vector<Spawn*>& spawns) {
+	map<int32, SpawnData> info_changes;
+	map<int32, SpawnData> pos_changes;
+	map<int32, SpawnData> vis_changes;
+
+	int32 info_size = 0;
+	int32 pos_size = 0;
+	int32 vis_size = 0;
+
+	for (const auto& spawn : spawns) {
+		int16 index = player->player_spawn_index_map[spawn];
+
+		if (spawn->info_changed) {
+			auto info_change = spawn->spawn_info_changes(GetPlayer(), GetVersion());
+
+			if (info_change) {
+				SpawnData data;
+				data.spawn = spawn;
+				data.data = info_change;
+				data.size = spawn->info_packet_size;
+				info_size += spawn->info_packet_size;
+
+				info_changes[index] = data;
+			}
+		}
+
+		if (spawn->position_changed) {
+			auto pos_change = spawn->spawn_pos_changes(GetPlayer(), GetVersion());
+
+			if (pos_change) {
+				SpawnData data;
+				data.spawn = spawn;
+				data.data = pos_change;
+				data.size = spawn->pos_packet_size;
+				pos_size += spawn->pos_packet_size;
+
+				pos_changes[index] = data;
+			}
+		}
+
+		if (spawn->vis_changed) {
+			auto vis_change = spawn->spawn_vis_changes(GetPlayer(), GetVersion());
+
+			if (vis_change) {
+				SpawnData data;
+				data.spawn = spawn;
+				data.data = vis_change;
+				data.size = spawn->vis_packet_size;
+				vis_size += spawn->vis_packet_size;
+
+				vis_changes[index] = data;
+			}
+		}
+
+		spawn->info_changed = false;
+		spawn->position_changed = false;
+		spawn->vis_changed = false;
+	}
+
+	if (info_size == 0 && pos_size == 0 && vis_size == 0) {
+		return;
+	}
+
+	static const int8 oversized = 255;
+	static const uchar null_byte = 0;
+	int16 opcode_val = EQOpcodeManager[GetOpcodeVersion(version)]->EmuToEQ(OP_EqUpdateGhostCmd);
+	int32 size = info_size + pos_size + vis_size + 14;
+	uchar* tmp = new uchar[size];
+	uchar* ptr = tmp;
+
+	memset(tmp, 0, size);
+
+	size -= 4;
+	memcpy(ptr, &size, sizeof(int32));
+	size += 4;
+	ptr += sizeof(int32);
+
+	memcpy(ptr, &oversized, sizeof(int8));
+	ptr += sizeof(int8);
+
+	memcpy(ptr, &opcode_val, sizeof(int16));
+	ptr += sizeof(int16);
+
+	int32 current_time = Timer::GetCurrentTime2();
+	memcpy(ptr, &current_time, sizeof(int32));
+	ptr += sizeof(int32);
+
+	memcpy(ptr, &info_size, sizeof(int8));
+	ptr += sizeof(int8);
+
+	for (const auto& kv : info_changes) {
+		auto info = kv.second;
+		memcpy(ptr, info.data, info.size);
+		ptr += info.size;
+	}
+
+	memcpy(ptr, &pos_size, sizeof(int8));
+	ptr += sizeof(int8);
+
+	for (const auto& kv : pos_changes) {
+		auto pos = kv.second;
+		memcpy(ptr, pos.data, pos.size);
+		ptr += pos.size;
+	}
+
+	memcpy(ptr, &vis_size, sizeof(int8));
+	ptr += sizeof(int8);
+
+	for (const auto& kv : vis_changes) {
+		auto vis = kv.second;
+		memcpy(ptr, vis.data, vis.size);
+		ptr += vis.size;
+	}
+
+	EQ2Packet* packet = new EQ2Packet(OP_ClientCmdMsg, tmp, size);
+
+	if (packet) {
+		QueuePacket(packet);
+	}
+
+	for (auto& kv : info_changes) {
+		safe_delete_array(kv.second.data);
+	}
+
+	for (auto& kv : pos_changes) {
+		safe_delete_array(kv.second.data);
+	}
+
+	for (auto& kv : vis_changes) {
+		safe_delete_array(kv.second.data);
+	}
+	delete[] tmp;
 }

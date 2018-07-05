@@ -198,6 +198,20 @@ struct MovementLocation{
 	string	lua_function;
 };
 
+struct SpawnUpdate {
+	int32 spawn_id;
+	bool info_changed;
+	bool vis_changed;
+	bool pos_changed;
+	shared_ptr<Client> client;
+};
+
+struct SpawnData {
+	Spawn* spawn;
+	uchar* data;
+	int32 size;
+};
+
 class Spawn {
 public:
 	Spawn();
@@ -206,49 +220,54 @@ public:
 	int temp_info_type = -1;
 	int movement_unknown = 0;
 
-	template <class Field, class Value> void Set(Field* field, Value value, bool setUpdateFlags = true){
-		if (setUpdateFlags) {
-			changed = true;
-			AddChangedZoneSpawn();
-		}
+	template <class Field, class Value> void Set(Field* field, Value value, bool setUpdateFlags = true) {
 		*field = value;
 	}
-	template <class Field> void Set(Field* field, const char* value, bool setUpdateFlags = true){
-		if (setUpdateFlags) {
-			changed = true;
-			AddChangedZoneSpawn();
-		}
+
+	template <class Field> void Set(Field* field, const char* value, bool setUpdateFlags = true) {
 		strcpy(field, value);
 	}
-	template <class Field, class Value> void SetPos(Field* field, Value value, bool setUpdateFlags = true){
-		if(setUpdateFlags){
-			position_changed = true;
+
+	template <class Field, class Value> void SetPos(Field* field, Value value, bool setUpdateFlags = true) {
+		if (setUpdateFlags) {
+			AddSpawnUpdate(false, true, false);
 		}
+
 		Set(field, value, setUpdateFlags);
 	}
-	template <class Field, class Value> void SetInfo(Field* field, Value value, bool setUpdateFlags = true){
-		if(setUpdateFlags){
-			info_changed = true;
+
+	template <class Field, class Value> void SetInfo(Field* field, Value value, bool setUpdateFlags = true) {
+		if (setUpdateFlags) {
+			AddSpawnUpdate(true, false, false);
 		}
+
 		Set(field, value);
 	}
-	template <class Field, class Value> void SetVis(Field* field, Value value, bool setUpdateFlags = true){
-		if(setUpdateFlags)
-			vis_changed = true;
+
+	template <class Field, class Value> void SetVis(Field* field, Value value, bool setUpdateFlags = true) {
+		if (setUpdateFlags) {
+			AddSpawnUpdate(false, false, true);
+		}
+
 		Set(field, value);
 	}
-	template <class Field> void SetPos(Field* field, char* value, bool setUpdateFlags = true){
-		if(setUpdateFlags){
-			position_changed = true;
+
+	template <class Field> void SetPos(Field* field, char* value, bool setUpdateFlags = true) {
+		if (setUpdateFlags) {
+			AddSpawnUpdate(false, true, false);
 		}
+
 		Set(field, value, setUpdateFlags);
 	}
-	template <class Field> void SetInfo(Field* field, char* value, bool setUpdateFlags = true){
-		if(setUpdateFlags){
-			info_changed = true;
+
+	template <class Field> void SetInfo(Field* field, char* value, bool setUpdateFlags = true) {
+		if (setUpdateFlags) {
+			AddSpawnUpdate(true, false, false);
 		}
+
 		Set(field, value);
 	}
+
 	EntityCommand* CreateEntityCommand(EntityCommand* old_command){
 		EntityCommand* entity_command = new EntityCommand;
 		entity_command->name = old_command->name;
@@ -269,7 +288,7 @@ public:
 		entity_command->spell_visual = spell_visual;
 		return entity_command;
 	}
-	void AddChangedZoneSpawn();
+	void AddSpawnUpdate(bool info_changed, bool pos_changed, bool vis_changed);
 	void AddPrimaryEntityCommand(const char* name, float distance, const char* command, const char* error_text, int16 cast_time, int32 spell_visual){
 		primary_command_list.push_back(CreateEntityCommand(name, distance, command, error_text, cast_time, spell_visual));
 	}
@@ -742,8 +761,6 @@ public:
 	EntityCommand* FindEntityCommand(string command);
 	virtual EQ2Packet* serialize(Player* player, int16 version);
 	EQ2Packet* spawn_serialize(Player* player, int16 version);
-	EQ2Packet* spawn_update_packet(Player* player, int16 version, bool override_changes = false, bool override_vis_changes = false);
-	EQ2Packet* player_position_update_packet(Player* player, int16 version);
 	uchar* spawn_info_changes(Player* spawn, int16 version);
 	uchar* spawn_pos_changes(Player* spawn, int16 version);
 	uchar* spawn_vis_changes(Player* spawn, int16 version);
@@ -887,7 +904,6 @@ public:
 	void	FaceTarget(Spawn* target);
 	void	SetInvulnerable(bool val);
 	bool	GetInvulnerable();
-	bool				changed;
 	bool				position_changed;
 	bool				info_changed;
 	bool				vis_changed;
@@ -949,6 +965,10 @@ public:
 	int8 size_mod_unknown;
 
 	CellInfo Cell_Info;
+
+	int16 pos_packet_size;
+	int16 info_packet_size;
+	int16 vis_packet_size;
 
 protected:
 	bool	send_spawn_changes;
@@ -1020,9 +1040,6 @@ private:
 
 	int16						m_illusionModel;
 
-	int16 pos_packet_size;
-	int16 info_packet_size;
-	int16 vis_packet_size;
 	Mutex m_Update;
 };
 

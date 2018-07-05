@@ -619,9 +619,8 @@ void Entity::AddSpellEffect(shared_ptr<LuaSpell> luaspell){
 		effect->icon_backdrop = spell->GetSpellData()->icon_backdrop;
 		effect->tier = spell->GetSpellTier();
 		MSpellEffects.releasewritelock(__FUNCTION__, __LINE__);
-		changed = true;
-		info_changed = true;
-		AddChangedZoneSpawn();
+
+		AddSpawnUpdate(true, false, false);
 	}
 }
 
@@ -676,9 +675,7 @@ void Entity::RemoveSpellEffect(shared_ptr<LuaSpell> spell) {
 	MSpellEffects.releasewritelock(__FUNCTION__, __LINE__);
 
 	if (found) {
-		changed = true;
-		info_changed = true;
-		AddChangedZoneSpawn();
+		AddSpawnUpdate(true, false, false);
 	}
 }
 
@@ -797,17 +794,13 @@ void Entity::SetMaxSpeed(float val){
 	max_speed = val;
 }
 
-void Entity::CalculateBonuses(){
+void Entity::CalculateBonuses() {
 	InfoStruct* info = &info_struct;
+
 	info->block = info->block_base;
-	
 	info->cur_attack = info->attack_base;
 	info->cur_mitigation = info->mitigation_base;
 	info->base_avoidance_pct = info->avoidance_base;
-
-	LogWrite(MISC__TODO, 1, "TODO", "Calculate via current spells\n\t(%s, function: %s, line #: %i)", __FILE__, __FUNCTION__, __LINE__);
-
-	//info->cur_concentration = 0;
 	info->parry = info->parry_base;
 	info->deflection = info->deflection_base;
 
@@ -827,6 +820,7 @@ void Entity::CalculateBonuses(){
 	info->str = info->str_base + info->str_temp;
 	info->wis = info->wis_base + info->wis_temp;
 	info->intel = info->intel_base + info->intel_temp;
+
 	info->ability_modifier = 0;
 	info->critical_mitigation = 0;
 	info->block_chance = 0;
@@ -858,52 +852,63 @@ void Entity::CalculateBonuses(){
 	CalculateSpellBonuses(values);
 
 	info->sta += values->sta;
-	if (info->sta < 0)
+	if (info->sta < 0) {
 		info->sta = 0;
+	}
 
 	info->str += values->str;
-	if (info->str < 0)
+	if (info->str < 0) {
 		info->str = 0;
+	}
 
 	info->agi += values->agi;
-	if (info->agi < 0)
+	if (info->agi < 0) {
 		info->agi = 0;
+	}
 
 	info->wis += values->wis;
-	if (info->wis < 0)
+	if (info->wis < 0) {
 		info->wis = 0;
+	}
 
 	info->intel += values->int_;
 	if (info->intel < 0)
 		info->intel = 0;
 
 	info->disease += values->vs_disease;
-	if (info->disease < 0)
+	if (info->disease < 0) {
 		info->disease = 0;
+	}
 
 	info->divine += values->vs_divine;
-	if (info->divine < 0)
+	if (info->divine < 0) {
 		info->divine = 0;
+	}
 
 	info->heat += values->vs_heat;
-	if (info->heat < 0)
+	if (info->heat < 0) {
 		info->heat = 0;
+	}
 
 	info->magic += values->vs_magic;
-	if (info->magic < 0)
+	if (info->magic < 0) {
 		info->magic = 0;
+	}
 
 	info->mental += values->vs_mental;
-	if (info->mental < 0)
+	if (info->mental < 0) {
 		info->mental = 0;
+	}
 
 	info->poison += values->vs_poison;
-	if (info->poison < 0)
+	if (info->poison < 0) {
 		info->poison = 0;
+	}
 
 	info->cold += values->vs_cold;
-	if (info->cold < 0)
+	if (info->cold < 0) {
 		info->cold = 0;
+	}
 
 	info->cur_mitigation += values->vs_slash;
 	info->cur_mitigation += values->vs_pierce;
@@ -1010,8 +1015,9 @@ bool Entity::CheckSpellBonusRemoval(shared_ptr<LuaSpell> spell, int16 type){
 	return false;
 }
 
-void Entity::AddSpellBonus(shared_ptr<LuaSpell> spell, int16 type, sint32 value, int64 class_req){
+void Entity::AddSpellBonus(shared_ptr<LuaSpell> spell, int16 type, sint32 value, int64 class_req) {
 	//CheckSpellBonusRemoval(spell, type);
+
 	BonusValues* bonus = new BonusValues;
 	bonus->luaspell = spell;
 	bonus->spell_id = spell->spell->GetSpellID();
@@ -1045,11 +1051,12 @@ vector<BonusValues*>* Entity::GetAllSpellBonuses(shared_ptr<LuaSpell> spell) {
 	return list;
 }
 
-void Entity::RemoveSpellBonus(shared_ptr<LuaSpell> spell){
+void Entity::RemoveSpellBonus(shared_ptr<LuaSpell> spell) {
 	MutexList<BonusValues*>::iterator itr = bonus_list.begin();
-	while(itr.Next()){
-		if(itr.value->luaspell == spell)
+	while (itr.Next()) {
+		if (itr.value->luaspell == spell) {
 			bonus_list.Remove(itr.value, true);
+		}
 	}
 }
 
@@ -1903,12 +1910,12 @@ void Entity::CancelAllStealth(shared_ptr<LuaSpell> exclude_spell) {
 		}
 	}
 
-	if (did_change){
-		info_changed = true;
-		changed = true;
-		AddChangedZoneSpawn();
-		if (IsPlayer())
-			((Player*)this)->SetCharSheetChanged(true);
+	if (did_change) {
+		AddSpawnUpdate(true, false, false);
+
+		if (IsPlayer()) {
+			static_cast<Player*>(this)->SetCharSheetChanged(true);
+		}
 	}
 }
 
@@ -1973,10 +1980,7 @@ void Entity::AddStealthSpell(shared_ptr<LuaSpell> spell) {
 
 	control_effects[CONTROL_EFFECT_TYPE_STEALTH]->Add(spell);
 	if (control_effects[CONTROL_EFFECT_TYPE_STEALTH]->size(true) > 0) {
-		info_changed = true;
-		changed = true;
-
-		AddChangedZoneSpawn();
+		AddSpawnUpdate(true, false, false);
 
 		if (IsPlayer()) {
 			static_cast<Player*>(this)->SetMeleeAttack(false);
@@ -1996,10 +2000,7 @@ void Entity::AddInvisSpell(shared_ptr<LuaSpell> spell) {
 
 	control_effects[CONTROL_EFFECT_TYPE_INVIS]->Add(spell);
 	if (control_effects[CONTROL_EFFECT_TYPE_INVIS]->size(true) > 0) {
-		info_changed = true;
-		changed = true;
-
-		AddChangedZoneSpawn();
+		AddSpawnUpdate(true, false, false);
 
 		if (IsPlayer()) {
 			static_cast<Player*>(this)->SetMeleeAttack(false);
@@ -2017,13 +2018,14 @@ void Entity::RemoveInvisSpell(shared_ptr<LuaSpell> spell) {
 
 	invis_list->Remove(spell);
 	RemoveSpellEffect(spell);
-	if (invis_list->size(true) == 0){
-		info_changed = true;
-		changed = true;
-		AddChangedZoneSpawn();
-		if (IsPlayer())
-			((Player*)this)->SetResendSpawns(true);
-			((Player*)this)->SetCharSheetChanged(true);
+
+	if (invis_list->size(true) == 0) {
+		AddSpawnUpdate(true, false, false);
+
+		if (IsPlayer()) {
+			static_cast<Player*>(this)->SetResendSpawns(true);
+			static_cast<Player*>(this)->SetCharSheetChanged(true);
+		}
 	}
 }
 
@@ -2037,14 +2039,11 @@ void Entity::RemoveStealthSpell(shared_ptr<LuaSpell> spell) {
 	RemoveSpellEffect(spell);
 
 	if (stealth_list->size() == 0) {
-		info_changed = true;
-		changed = true;
-
-		AddChangedZoneSpawn();
+		AddSpawnUpdate(true, false, false);
 
 		if (IsPlayer()) {
-			((Player*)this)->SetResendSpawns(true);
-			((Player*)this)->SetCharSheetChanged(true);
+			static_cast<Player*>(this)->SetResendSpawns(true);
+			static_cast<Player*>(this)->SetCharSheetChanged(true);
 		}
 	}
 }
@@ -2442,6 +2441,7 @@ void Entity::RemoveEffectsFromLuaSpell(shared_ptr<LuaSpell> spell) {
 			}
 		}
 	}
+
 	if (effect_bitmask & EFFECT_FLAG_SPELLBONUS)
 		RemoveSpellBonus(spell);
 	if (effect_bitmask & EFFECT_FLAG_STEALTH)
@@ -2723,8 +2723,8 @@ void Entity::CustomizeAppearance(PacketStruct* packet) {
 
 	features.body_size = body_size;
 	features.body_age = body_age;
-	info_changed = true;
-	changed = true;
+
+	AddSpawnUpdate(true, false, false);
 }
 
 void Entity::AddSkillBonus(int32 spell_id, int32 skill_id, float value) {

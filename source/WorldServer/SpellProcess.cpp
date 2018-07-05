@@ -1304,7 +1304,6 @@ bool SpellProcess::CastProcessedSpell(shared_ptr<LuaSpell> spell, bool passive) 
 
 	if (spell->targets.size() > 0) {
 		ZoneServer* zone = spell->caster->GetZone();
-		Spawn* target = nullptr;
 
 		spell->MSpellTargets.readlock(__FUNCTION__, __LINE__);
 		for (int32 i = 0; i < spell->targets.size(); i++) {
@@ -1312,7 +1311,7 @@ bool SpellProcess::CastProcessedSpell(shared_ptr<LuaSpell> spell, bool passive) 
 			int8 damage_type = 0;
 			int8 hit_result = 0;
 
-			target = zone->GetSpawnByID(spell->targets[i]);
+			Spawn* target = zone->GetSpawnByID(spell->targets[i]);
 
 			if (!target) {
 				continue;
@@ -1410,10 +1409,15 @@ bool SpellProcess::CastProcessedSpell(shared_ptr<LuaSpell> spell, bool passive) 
 					if (!spell->resisted && spell->spell->GetSpellData()->duration1 > 0) {
 						spell->timer.Start();
 
-						if (spell->spell->GetSpellData()->call_frequency > 0)
+						if (spell->spell->GetSpellData()->call_frequency > 0) {
 							spell->timer.SetTimer(spell->spell->GetSpellData()->call_frequency * 100);
-						else
+						} else {
 							spell->timer.SetTimer(spell->spell->GetSpellData()->duration1 * 100);
+						}
+
+						if (spell->effect_bitmask & EFFECT_FLAG_SPELLBONUS && target->IsEntity()) {
+							static_cast<Entity*>(target)->CalculateBonuses();
+						}
 					}
 
 					target->GetZone()->CallSpawnScript(target, SPAWN_SCRIPT_CASTED_ON, spell->caster, spell->spell->GetName());
@@ -2061,6 +2065,11 @@ void SpellProcess::CheckRemoveTargetFromSpell() {
 
 						client->Message(CHANNEL_COLOR_SPELL_FADE, fade_message.c_str());
 					}
+				}
+
+
+				if (spell->effect_bitmask & EFFECT_FLAG_SPELLBONUS) {
+					static_cast<Entity*>(target)->CalculateBonuses();
 				}
 			}
 		}

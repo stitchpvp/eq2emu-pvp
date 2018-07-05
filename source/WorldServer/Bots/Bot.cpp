@@ -667,14 +667,4 @@ void Bot::ChangeLevel(int16 old_level, int16 new_level) {
 	SetHPRegen((int)(new_level*.75) + (int)(new_level / 10) + 3);
 	SetPowerRegen(new_level + (int)(new_level / 10) + 4);
 	GetInfoStruct()->poison_base = (int16)(new_level*1.5 + 10);
-	/*UpdateTimeStampFlag(LEVEL_UPDATE_FLAG);
-	GetPlayer()->SetCharSheetChanged(true);
-
-	Message(CHANNEL_COLOR_EXP, "You are now level %i!", new_level);
-	LogWrite(WORLD__DEBUG, 0, "World", "Player: %s leveled from %u to %u", GetPlayer()->GetName(), old_level, new_level);
-	GetPlayer()->GetSkills()->SetSkillCapsByType(1, 5 * new_level);
-	GetPlayer()->GetSkills()->SetSkillCapsByType(3, 5 * new_level);
-	GetPlayer()->GetSkills()->SetSkillCapsByType(6, 5 * new_level);
-	GetPlayer()->GetSkills()->SetSkillCapsByType(13, 5 * new_level);
-	*/
 }

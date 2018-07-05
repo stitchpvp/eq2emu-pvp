@@ -164,9 +164,8 @@ struct LocationTransportDestination;
 
 void ZoneLoop(ZoneServer* zs);
 void SpawnLoop(ZoneServer* zs);
+void UpdateLoop(ZoneServer* zs);
 void SendInitialSpawns(shared_ptr<Client> client);
-void SendLevelChangedSpawns(shared_ptr<Client> client);
-void SendAggroChangedSpawns(shared_ptr<Client> client);
 
 using namespace std;
 struct RevivePoint{
@@ -223,9 +222,10 @@ public:
 	ZoneServer(const char* file);
     ~ZoneServer();
 	
-	void		Init();
-	bool		Process();
-	bool		SpawnProcess();
+	void Init();
+	bool Process();
+	bool SpawnProcess();
+	bool UpdateProcess();
 	
 	void	LoadRevivePoints(vector<RevivePoint*>* revive_points);
 	vector<RevivePoint*>* GetRevivePoints(const shared_ptr<Client>& client);
@@ -282,10 +282,7 @@ public:
 	void	PlaySoundFile(const shared_ptr<Client>& client, const char* name, float origin_x, float origin_y, float origin_z);
 	void	SendZoneSpawns(const shared_ptr<Client>& client);
 	void	StartZoneInitialSpawnThread(shared_ptr<Client> client);
-	void	SendSpawnChanges(bool only_pos_changes = false);
-	void	SendSpawnChanges(Spawn* spawn);
-	void	SendSpawnChanges(Spawn* spawn, const shared_ptr<Client>& client, bool override_changes = false, bool override_vis_changes = false);
-	void	SendSpawnChanges(int32 spawn_id, const shared_ptr<Client>& client, bool override_changes = false, bool override_vis_changes = false);
+	void	SendSpawnChanges(bool only_pos_changes = false, bool only_players = false);
 	
 	void	UpdateVitality(float amount);
 	
@@ -336,7 +333,6 @@ public:
 	volatile bool	combatthread_active;
 	volatile int8	initial_spawn_threads_active;
 	volatile bool	client_thread_active;
-	void	AddChangedSpawn(Spawn* spawn);
 	
 	void	AddDamagedSpawn(Spawn* spawn);
 	
@@ -390,9 +386,6 @@ public:
 
 	/// <summary>Gets spawns for a true AoE spell</summary>
 	vector<Spawn*> GetAttackableSpawnsByDistance(Spawn* spawn, float distance);
-
-	void StartZoneSpawnsForLevelThread(shared_ptr<Client> client);
-	void StartZoneSpawnsForAggroThread(shared_ptr<Client> client);
 
     void SendDispellPacket(Entity* caster, Spawn* target, string dispell_name, string spell_name, int8 dispell_type);
 
@@ -543,7 +536,7 @@ public:
 	void	SetWeatherLastChangedTime(int32 val) { weather_last_changed_time = val; }
 
 	void	RemoveClientImmediately(shared_ptr<Client> client);
-	void	RemoveFromRangeMap(shared_ptr<Client> client);
+	void	RemoveFromSpawnRangeMap(shared_ptr<Client> client);
 
 	void	ClearHate(Entity* entity);
 
@@ -596,6 +589,12 @@ public:
 	void	SendSpawn(Spawn* spawn, const shared_ptr<Client>& client);
 	void	SaveClients();
 
+	bool SendRemoveSpawn(const shared_ptr<Client>& client, Spawn* spawn, PacketStruct* packet = 0, bool delete_spawn = false);
+	void AddSpawnUpdate(int32 spawn_id, bool info_changed, bool pos_changed, bool vis_changed, shared_ptr<Client> client = nullptr);
+	void RemoveSpawnUpdate(int32 spawn_id);
+
+	void AddToSpawnRangeMap(shared_ptr<Client> client);
+
 private:
 	/* Private Functions */
 	void	AddTransporter(LocationTransportDestination* loc);
@@ -623,7 +622,6 @@ private:
 	void	SendCharSheetChanges(const shared_ptr<Client>& client);																// never used outside zone server
 	void	CheckSendSpawnToClient();																			// never used outside zone server
 	void	CheckSendSpawnToClient(const shared_ptr<Client>& client, bool initial_login = false);									// never used outside zone server
-	bool	SendRemoveSpawn(const shared_ptr<Client>& client, Spawn* spawn, PacketStruct* packet = 0, bool delete_spawn = false);	// never used outside zone server
 	void	CheckRemoveSpawnFromClient(Spawn* spawn);															// never used outside zone server
 	void	SaveClient(const shared_ptr<Client>& client);																			// never used outside zone server
 	void	ProcessFaction(Spawn* spawn, const shared_ptr<Client>& client);														// never used outside zone server
@@ -657,7 +655,6 @@ private:
 	void	DeleteSpawns(bool delete_all);																		// never used outside zone server
 	void	AddPendingDelete(Spawn* spawn);																		// never used outside zone server
 	void	ClearDeadSpawns();																					// never used outside zone server
-	void	RemoveChangedSpawn(Spawn* spawn);																	// never used outside zone server
 	void	ProcessDrowning();																					// never used outside zone server
 	void	RemoveDamagedSpawn(Spawn* spawn);																	// never used outside zone server
 	void	ProcessTracking();																					// never used outside zone server
@@ -672,6 +669,13 @@ private:
 	///<summary>Dismiss all pets in the zone, useful when the spell process needs to be reloaded</summary>
 	void DismissAllPets();																						// never used outside zone server
 
+	void ClearSpawnRangeMap();
+	void SetClientRangeDistance(shared_ptr<Client> client, int32 spawn_id, float distance);
+	float GetClientRangeDistance(shared_ptr<Client> client, int32 spawn_id);
+	bool HasClientRangeSpawn(shared_ptr<Client> client, int32 spawn_id);
+	map<int32, float>* GetClientRangeMap(shared_ptr<Client> client);
+	void RemoveFromClientRangeMap(shared_ptr<Client> client, int32 spawn_id);
+
 	void SetSpawnStructs(const shared_ptr<Client>& client);
 
 	vector<shared_ptr<Client>> clients;
@@ -683,7 +687,7 @@ private:
 	set<SpawnScriptTimer*> spawn_script_timers;
 	set<SpawnScriptTimer*> remove_spawn_script_timers_list;
 
-	set<int32> changed_spawns;
+	map<int32, shared_ptr<SpawnUpdate>> changed_spawns;
 
 	mutex changed_spawns_mutex;
 
@@ -713,8 +717,14 @@ private:
 	MutexMap<int32, MutexList<int32> >				spawn_group_map;								// MutexList<int32> is a list of spawn id's
 	map<int32, list<int32>* >						spawn_location_groups;
 	map<int32, SpawnLocation*>						spawn_location_list;
-	MutexMap<shared_ptr<Client>, MutexMap<int32, float >* >	spawn_range_map;								// int32 in the MutexMap<int32, float>* = spawn id, float = distance
+	//MutexMap<shared_ptr<Client>, MutexMap<int32, float >* >	spawn_range_map;								// int32 in the MutexMap<int32, float>* = spawn id, float = distance
 	MutexMap<int32, int32>							widget_timers;									// 1st int32 = spawn id
+
+	map<shared_ptr<Client>, unique_ptr<map<int32, float>>> spawn_range_map;
+
+	map<shared_ptr<Client>, mutex> client_range_mutex_map;
+	mutex spawn_range_mutex;
+	mutex client_range_mutex;
 
 	set<Spawn*> hide_spawns;
 
@@ -778,6 +788,7 @@ private:
 	Timer	spawn_range;
 	Timer	spawn_update;
 	Timer	spawn_pos_update;
+	Timer player_pos_update;
 	Timer	sync_game_time_timer;
 	Timer	tracking_timer;
 	Timer	weatherTimer;

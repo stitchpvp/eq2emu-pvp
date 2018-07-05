@@ -655,29 +655,33 @@ map<string, string> TranslateBrokerRequest(string request){
 	return ret;
 }
 
-int8 CheckOverLoadSize(int32 val){
+int8 CheckOverLoadSize(int32 val) {
 	int8 ret = 1;
-	if(val >= 0xFFFF) //int32
+
+	if (val >= 0xFFFF) {
 		ret = sizeof(int16) + sizeof(int32);
-	else if(val >= 0xFF)
+	} else if (val >= 0xFF) {
 		ret = sizeof(int8) + sizeof(int16);
+	}
+
 	return ret;
 }
 
-int8 DoOverLoad(int32 val, uchar* data){
+int8 DoOverLoad(int32 val, uchar* data) {
 	int8 ret = 1;
-	if(val >= 0xFFFF){ //int32
+
+	if (val >= 0xFFFF) {
 		memset(data, 0xFF, sizeof(int16));
 		memcpy(data + sizeof(int16), &val, sizeof(int32));
 		ret = sizeof(int16) + sizeof(int32);
-	}
-	else if(val >= 0xFF){ //int16
+	} else if (val >= 0xFF) {
 		memset(data, 0xFF, sizeof(int8));
 		memcpy(data + sizeof(int8), &val, sizeof(int16));
 		ret = sizeof(int8) + sizeof(int16);
-	}
-	else
+	} else {
 		memcpy(data, &val, sizeof(int8));
+	}
+
 	return ret;
 }
 

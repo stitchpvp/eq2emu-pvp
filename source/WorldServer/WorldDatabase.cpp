@@ -1552,6 +1552,8 @@ bool WorldDatabase::LoadCharacterStats(int32 id, int32 account_id, const shared_
 
 			if (client->GetPlayer()->GetHP() == 0)
 				client->GetPlayer()->SetSpawnType(1);
+
+			client->GetPlayer()->CalculateBonuses();
 		}
 
 		return true;

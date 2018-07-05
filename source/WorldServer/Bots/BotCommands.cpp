@@ -429,9 +429,7 @@ void Commands::Command_Bot_Customize(const shared_ptr<Client>& client, Seperator
 			client->GetPlayer()->custNPCTarget = bot;
 			memcpy(playerApp, botApp, sizeof(AppearanceData));
 			memcpy(playerFeatures, botFeatures, sizeof(CharFeatures));
-			client->GetPlayer()->changed = true;
-			client->GetPlayer()->info_changed = true;
-			client->GetCurrentZone()->SendSpawnChanges(client->GetPlayer(), client);
+			client->GetPlayer()->AddSpawnUpdate(true, false, false);
 			packet->setDataByName("race_id", 255);
 			client->QueuePacket(packet->serialize());
 		}
@@ -636,15 +634,11 @@ void Commands::Command_Bot_Settings(const shared_ptr<Client>& client, Seperator*
 			if (bot->GetOwner() == client->GetPlayer()) {
 				if (strncasecmp("helm", sep->arg[0], 4) == 0) {
 					bot->ShowHelm = (atoi(sep->arg[1]) == 1) ? true : false;
-					bot->info_changed = true;
-					bot->changed = true;
-					bot->GetZone()->SendSpawnChanges(bot);
+					bot->AddSpawnUpdate(true, false, false);
 				}
 				else if (strncasecmp("cloak", sep->arg[0], 5) == 0) {
 					bot->ShowCloak = (atoi(sep->arg[1]) == 1) ? true : false;
-					bot->info_changed = true;
-					bot->changed = true;
-					bot->GetZone()->SendSpawnChanges(bot);
+					bot->AddSpawnUpdate(true, false, false);
 				}
 				else if (strncasecmp("taunt", sep->arg[0], 5) == 0) {
 					bot->CanTaunt = (atoi(sep->arg[1]) == 1) ? true : false;

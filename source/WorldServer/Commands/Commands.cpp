@@ -1560,8 +1560,6 @@ void Commands::Process(int32 index, EQ2_16BitString* command_parms, const shared
 					client->GetPlayer()->SetCharSheetChanged(true);
 				}
 				client->GetPlayer()->SetModelType(atoi(sep->arg[0]));
-				//EQ2Packet* outapp = client->GetPlayer()->spawn_update_packet(client->GetPlayer(), client->GetVersion(), client->GetPlayer()->GetFeatures());
-				//client->QueuePacket(outapp);
 			}
 			else{
 				client->SimpleMessage(CHANNEL_COLOR_YELLOW, "Usage: /race {race type id} {race id}");
@@ -4128,15 +4126,14 @@ void Commands::Command_Follow(const shared_ptr<Client>& client, Seperator* sep)
 
 		world.GetGroupManager()->ReleaseGroupLock(__FUNCTION__, __LINE__);
 	}
+
 	if (targetInGroup) {
-		// CHANNEL_COLOR_CHAT_RELATIONSHIP = 4, which matches the value in logs
 		client->Message(CHANNEL_COLOR_CHAT_RELATIONSHIP, "You start to follow %s.", client->GetPlayer()->GetTarget()->GetName());
 		client->GetPlayer()->SetFollowTarget(client->GetPlayer()->GetTarget());
-		client->GetPlayer()->info_changed = true;
-		client->GetPlayer()->changed = true;
-	}
-	else
+		client->GetPlayer()->AddSpawnUpdate(true, false, false);
+	} else {
 		client->Message(CHANNEL_COLOR_WHITE, "You must first select a group member to follow.");
+	}
 }
 
 /* 
@@ -4153,8 +4150,7 @@ void Commands::Command_StopFollow(const shared_ptr<Client>& client, Seperator* s
 		// CHANNEL_COLOR_CHAT_RELATIONSHIP = 4, which matches the value in logs
 		client->Message(CHANNEL_COLOR_CHAT_RELATIONSHIP, "You are no longer following %s", client->GetPlayer()->GetFollowTarget()->GetName());
 		client->GetPlayer()->SetFollowTarget(0);
-		client->GetPlayer()->info_changed = true;
-		client->GetPlayer()->changed = true;
+		client->GetPlayer()->AddSpawnUpdate(true, false, false);
 	}
 }
 
@@ -4844,8 +4840,7 @@ void Commands::Command_Inventory(const shared_ptr<Client>& client, Seperator* se
 				client->GetPlayer()->ChangePrimaryWeapon();
 				client->GetPlayer()->ChangeSecondaryWeapon();
 				client->GetPlayer()->ChangeRangedWeapon();
-				EQ2Packet* characterSheetPackets = client->GetPlayer()->GetPlayerInfo()->serialize(client->GetVersion());
-				client->QueuePacket(characterSheetPackets);
+				ClientPacketFunctions::SendCharacterSheet(client);
 			}
 		}
 		else if(sep->arg[1][0] && strncasecmp("unequip", sep->arg[0], 7) == 0 && sep->IsNumber(1))
@@ -4881,8 +4876,7 @@ void Commands::Command_Inventory(const shared_ptr<Client>& client, Seperator* se
 				client->GetPlayer()->ChangePrimaryWeapon();
 				client->GetPlayer()->ChangeSecondaryWeapon();
 				client->GetPlayer()->ChangeRangedWeapon();
-				EQ2Packet* characterSheetPackets = client->GetPlayer()->GetPlayerInfo()->serialize(client->GetVersion());
-				client->QueuePacket(characterSheetPackets);
+				ClientPacketFunctions::SendCharacterSheet(client);
 			}
 		}
 		else if(sep->arg[2][0] && strncasecmp("swap_equip", sep->arg[0], 10) == 0 && sep->IsNumber(1) && sep->IsNumber(2))
@@ -8198,9 +8192,7 @@ void Commands::Command_Player_Set(const shared_ptr<Client>& client, Seperator* s
 			if (sep->IsNumber(1)) {
 				value = atoi(sep->arg[1]);
 				player->SetAlignment(value);
-				player->info_changed = true;
-				player->vis_changed = true;
-				player->AddChangedZoneSpawn();
+				player->AddSpawnUpdate(true, false, true);
 				player->SetResendSpawns(true);
 
 				return;
@@ -8488,10 +8480,10 @@ void Commands::Command_Heal(const shared_ptr<Client>& client) {
 			}
 		}
 
+		player->SetAttackable(1);
 		player->SetSpawnType(4);
 		player->SetTempActionState(-1);
-		player->appearance.attackable = 1;
-		player->SendSpawnChanges(true);
+		player->AddSpawnUpdate(true, false, false);
 	}
 
 	int32 heal_amount = player->GetTotalHP() - player->GetHP();

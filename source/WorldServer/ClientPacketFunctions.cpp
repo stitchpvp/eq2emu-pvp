@@ -100,12 +100,15 @@ void ClientPacketFunctions::SendCharacterData(const shared_ptr<Client>& client) 
 
 void ClientPacketFunctions::SendCharacterSheet(const shared_ptr<Client>& client) {
 	EQ2Packet* app = client->GetPlayer()->GetPlayerInfo()->serialize(client->GetVersion());
+
 	client->QueuePacket(app);
 
 	if (client->GetVersion() >= 1188) {
 		EQ2Packet* app2 = client->GetPlayer()->GetPlayerInfo()->serializePet(client->GetVersion());
-		if (app2)
+
+		if (app2) {
 			client->QueuePacket(app2);
+		}
 	}
 }
 

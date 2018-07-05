@@ -130,6 +130,7 @@ bool Entity::AttackAllowed(Entity* target, float distance, bool range_attack) {
 	}
 
 	if (!FacingTarget(target)) {
+		LogWrite(COMBAT__DEBUG, 3, "AttackAllowed", "Failed to attack: not facing target");
 		return false;
 	}
 
@@ -733,7 +734,7 @@ bool Entity::DamageSpawn(Entity* victim, int8 type, int8 damage_type, int32 low_
 	if (!no_calcs) {
 		if (type == DAMAGE_PACKET_TYPE_SIMPLE_DAMAGE || type == DAMAGE_PACKET_TYPE_RANGE_DAMAGE ) {
 			//DPS mod is only applied to auto attacks
-			damage *= (info_struct.dps_multiplier);
+			damage *= max(1.0f, info_struct.dps_multiplier);
 		} else {
 			damage *= 1 + (info_struct.base_ability_modifier / 100.0);
 			damage = ApplyPotency(damage);

@@ -62,7 +62,6 @@ Spawn::Spawn(){
 	z_offset = 0;
 	database_id = 0;
 	packet_num = 1;
-	changed = false;
 	vis_changed = false;
 	position_changed = false;
 	send_spawn_changes = true;
@@ -441,34 +440,46 @@ uchar* Spawn::spawn_info_changes(Player* player, int16 version){
 	PacketStruct* packet = player->GetSpawnInfoStruct();
 
 	player->info_mutex.writelock(__FUNCTION__, __LINE__);
+
 	packet->ResetData();
 	InitializeInfoPacketData(player, packet);
+
 	string* data = packet->serializeString();
 	int32 size = data->length();
 	uchar* xor_info_packet = player->GetTempInfoPacketForXOR();
-	if (!xor_info_packet)
+
+	if (!xor_info_packet) {
 		xor_info_packet = player->SetTempInfoPacketForXOR(size);
+	}
+
 	uchar* orig_packet = player->GetSpawnInfoPacketForXOR(id);
-	if(orig_packet){
+
+	if (orig_packet) {
 		memcpy(xor_info_packet, (uchar*)data->c_str(), size);
  		Encode(xor_info_packet, orig_packet, size);
 	}
+
 	uchar* tmp = new uchar[size + 10];
 	size = Pack(tmp, xor_info_packet, size, size, version);
+
 	player->info_mutex.releasewritelock(__FUNCTION__, __LINE__);
 
 	int32 orig_size = size;
-	size-=sizeof(int32);
-	size+=CheckOverLoadSize(index);
-	info_packet_size = size + CheckOverLoadSize(size);
 
-	uchar* tmp2 = new uchar[info_packet_size];
+	size -= sizeof(int32);
+	size += CheckOverLoadSize(index);
+	info_packet_size = size;
+
+	uchar* tmp2 = new uchar[size];
 	uchar* ptr = tmp2;
-	ptr += DoOverLoad(size, ptr);
+
 	ptr += DoOverLoad(index, ptr);
-	memcpy(ptr, tmp+sizeof(int32), orig_size - sizeof(int32));
+
+	memcpy(ptr, tmp + sizeof(int32), orig_size - sizeof(int32));
+
 	delete[] tmp;
-	return tmp2;
+
+	return move(tmp2);
 }
 
 uchar* Spawn::spawn_vis_changes(Player* player, int16 version){
@@ -476,33 +487,46 @@ uchar* Spawn::spawn_vis_changes(Player* player, int16 version){
 	int16 index = player->player_spawn_index_map[this];
 
 	player->vis_mutex.writelock(__FUNCTION__, __LINE__);
+
 	uchar* orig_packet = player->GetSpawnVisPacketForXOR(id);
+
 	vis_struct->ResetData();
 	InitializeVisPacketData(player, vis_struct);
+
 	string* data = vis_struct->serializeString();
 	int32 size = data->length();
 	uchar* xor_vis_packet = player->GetTempVisPacketForXOR();
-	if (!xor_vis_packet)
+
+	if (!xor_vis_packet) {
 		xor_vis_packet = player->SetTempVisPacketForXOR(size);
-	if(orig_packet){
+	}
+
+	if (orig_packet) {
 		memcpy(xor_vis_packet, (uchar*)data->c_str(), size);
 		Encode(xor_vis_packet, orig_packet, size);
 	}
+
 	uchar* tmp = new uchar[size + 10];
 	size = Pack(tmp, xor_vis_packet, size, size, version);
+
 	player->vis_mutex.releasewritelock(__FUNCTION__, __LINE__);
 
 	int32 orig_size = size;
-	size-=sizeof(int32);
-	size+=CheckOverLoadSize(index);
-	vis_packet_size = size + CheckOverLoadSize(size);
-	uchar* tmp2 = new uchar[vis_packet_size];
+
+	size -= sizeof(int32);
+	size += CheckOverLoadSize(index);
+	vis_packet_size = size;
+
+	uchar* tmp2 = new uchar[size];
 	uchar* ptr = tmp2;
-	ptr += DoOverLoad(size, ptr);
+
 	ptr += DoOverLoad(index, ptr);
-	memcpy(ptr, tmp+sizeof(int32), orig_size - sizeof(int32));
+
+	memcpy(ptr, tmp + sizeof(int32), orig_size - sizeof(int32));
+
 	delete[] tmp;
-	return tmp2;
+
+	return move(tmp2);
 }
 
 uchar* Spawn::spawn_pos_changes(Player* player, int16 version){
@@ -511,176 +535,73 @@ uchar* Spawn::spawn_pos_changes(Player* player, int16 version){
 	PacketStruct* packet = player->GetSpawnPosStruct();
 
 	player->pos_mutex.writelock(__FUNCTION__, __LINE__);
+
 	uchar* orig_packet = player->GetSpawnPosPacketForXOR(id);
+
 	packet->ResetData();
 	InitializePosPacketData(player, packet);
+
 	string* data = packet->serializeString();
 	int32 size = data->length();
 	uchar* xor_pos_packet = player->GetTempPosPacketForXOR();
-	if (!xor_pos_packet)
+
+	if (!xor_pos_packet) {
 		xor_pos_packet = player->SetTempPosPacketForXOR(size);
-	if(orig_packet){
+	}
+
+	if (orig_packet) {
 		memcpy(xor_pos_packet, (uchar*)data->c_str(), size);
 		Encode(xor_pos_packet, orig_packet, size);
 	}
-	uchar* tmp;
-	if (IsPlayer())
-		tmp = new uchar[size + 14];
-	else
-		tmp = new uchar[size + 10];
+
+	uchar* tmp = new uchar[size + 10];
+
 	size = Pack(tmp, xor_pos_packet, size, size, version);
+
 	player->pos_mutex.releasewritelock(__FUNCTION__, __LINE__);
 
-
 	int32 orig_size = size;
-	// Needed for CoE+ clients
-	if (version >= 1188)
+
+	if (version >= 1188) {
 		size += 1;
+	}
 
-	if(IsPlayer())
+	if (IsPlayer()) {
 		size += 4;
-	size-=sizeof(int32);
-	size+=CheckOverLoadSize(index);
+	}
 
-	pos_packet_size = size + CheckOverLoadSize(size);
-	uchar* tmp2 = new uchar[pos_packet_size];
+	size -= sizeof(int32);
+	size += CheckOverLoadSize(index);
+	pos_packet_size = size;
+
+	uchar* tmp2 = new uchar[size];
 	uchar* ptr = tmp2;
-	ptr += DoOverLoad(size, ptr);
+
 	ptr += DoOverLoad(index, ptr);
 
 	// extra byte in coe+ clients, 0 for NPC's 1 for Players
 	int8 x = 0;
-	if(IsPlayer()){
+
+	if (IsPlayer()) {
 		if (version >= 1188) {
-			// set x to 1 and add it to the packet
 			x = 1;
 			memcpy(ptr, &x, sizeof(int8));
 			ptr += sizeof(int8);
 		}
+
 		int32 now = Timer::GetCurrentTime2();
 		memcpy(ptr, &now, sizeof(int32));
 		ptr += sizeof(int32);
-	}
-	else if (version >= 1188) {
-		// add x to packet
+	} else if (version >= 1188) {
 		memcpy(ptr, &x, sizeof(int8));
 		ptr += sizeof(int8);
 	}
-	memcpy(ptr, tmp+sizeof(int32), orig_size - sizeof(int32));
+
+	memcpy(ptr, tmp + sizeof(int32), orig_size - sizeof(int32));
+
 	delete[] tmp;
-	return tmp2;
-}
 
-EQ2Packet* Spawn::player_position_update_packet(Player* player, int16 version){
-	if(!player || player->IsPlayer() == false){
-		LogWrite(SPAWN__ERROR, 0, "Spawn", "Error: Called player_position_update_packet without player!");
-		return 0;
-	}
-	else if(IsPlayer() == false){
-		LogWrite(SPAWN__ERROR, 0, "Spawn", "Error: Called player_position_update_packet from spawn!");
-		return 0;
-	}
-
-	static const int8 info_size = 1;
-	static const int8 vis_size = 1;
-	m_Update.writelock(__FUNCTION__, __LINE__);
-	uchar* pos_changes = spawn_pos_changes(player, version);
-	int32 tmp_pos_packet_size = pos_packet_size;
-	m_Update.releasewritelock(__FUNCTION__, __LINE__);
-
-	int32 size = info_size + tmp_pos_packet_size + vis_size + 11;
-	static const int8 oversized = 255;
-	int16 opcode_val = EQOpcodeManager[GetOpcodeVersion(version)]->EmuToEQ(OP_EqUpdateGhostCmd);
-	uchar* tmp = new uchar[size];
-	memset(tmp, 0, size);
-	uchar* ptr = tmp;
-	size -=4;
-	memcpy(ptr, &size, sizeof(int32));
-	size +=4;
-	ptr += sizeof(int32);
-	memcpy(ptr, &oversized, sizeof(int8));
-	ptr += sizeof(int8);
-	memcpy(ptr, &opcode_val, sizeof(int16));
-	ptr += sizeof(int16);
-	ptr += sizeof(int32);
-	ptr += info_size;
-	memcpy(ptr, pos_changes, tmp_pos_packet_size);
-	EQ2Packet* ret_packet = new EQ2Packet(OP_ClientCmdMsg, tmp, size);
-	delete[] tmp;
-	delete[] pos_changes;
-	return ret_packet;
-}
-
-EQ2Packet* Spawn::spawn_update_packet(Player* player, int16 version, bool override_changes, bool override_vis_changes){
-	if (!player || !player->IsPlayer()) {
-		LogWrite(SPAWN__ERROR, 0, "Spawn", "Error: Called spawn_update_packet without player!");
-		return 0;
-	} else if (!info_changed && !vis_changed && !position_changed) {
-		if (!override_changes && !override_vis_changes) {
-			return 0;
-		}
-	}
-
-	static const uchar null_byte = 0;
-
-	uchar* info_changes = 0;
-	uchar* pos_changes = 0;
-	uchar* vis_changes = 0;
-	static const int8 oversized = 255;
-	int16 opcode_val = EQOpcodeManager[GetOpcodeVersion(version)]->EmuToEQ(OP_EqUpdateGhostCmd);
-
-	int16 tmp_info_packet_size;
-	int16 tmp_vis_packet_size;
-	int16 tmp_pos_packet_size;
-	//We need to lock these variables up to make this thread safe
-	m_Update.writelock(__FUNCTION__, __LINE__);
-	//These variables are set in the spawn_info_changes, pos and vis changes functions
-	info_packet_size = 1;
-	pos_packet_size = 1;
-	vis_packet_size = 1;
-
-	if (info_changed || override_changes)
-		info_changes = spawn_info_changes(player, version);
-	if ((position_changed || override_changes))
-		pos_changes = spawn_pos_changes(player, version);
-	if (vis_changed || override_changes || override_vis_changes)
-		vis_changes = spawn_vis_changes(player, version);
-
-	tmp_info_packet_size = info_packet_size;
-	tmp_pos_packet_size = pos_packet_size;
-	tmp_vis_packet_size = vis_packet_size;
-	m_Update.releasewritelock(__FUNCTION__, __LINE__);
-
-	int32 size = info_packet_size + pos_packet_size + vis_packet_size + 11;
-	uchar* tmp = new uchar[size];
-	memset(tmp, 0, size);
-	uchar* ptr = tmp;
-	size -=4;
-	memcpy(ptr, &size, sizeof(int32));
-	size +=4;
-	ptr += sizeof(int32);
-	memcpy(ptr, &oversized, sizeof(int8));
-	ptr += sizeof(int8);
-	memcpy(ptr, &opcode_val, sizeof(int16));
-	ptr += sizeof(int16);
-	if (!IsPlayer()) {
-		packet_num = Timer::GetCurrentTime2();
-		memcpy(ptr, &packet_num, sizeof(int32));
-	}
-	ptr += sizeof(int32);
-
-	memcpy(ptr, info_changes ? info_changes : &null_byte, tmp_info_packet_size);
-	ptr += info_packet_size;
-	memcpy(ptr, pos_changes ? pos_changes : &null_byte, tmp_pos_packet_size);
-	ptr += pos_packet_size;
-	memcpy(ptr, vis_changes ? vis_changes : &null_byte, tmp_vis_packet_size);
-
-	EQ2Packet* ret_packet = new EQ2Packet(OP_ClientCmdMsg, tmp, size);
-	delete[] tmp;
-	safe_delete_array(info_changes);
-	safe_delete_array(vis_changes);
-	safe_delete_array(pos_changes);
-	return ret_packet;
+	return move(tmp2);
 }
 
 EQ2Packet* Spawn::serialize(Player* player, int16 version){
@@ -2506,9 +2427,10 @@ int32 Spawn::GetSpawnGroupID(){
 	return group_id;
 }
 
-void Spawn::AddChangedZoneSpawn(){
-	if(send_spawn_changes && GetZone())
-		GetZone()->AddChangedSpawn(this);
+void Spawn::AddSpawnUpdate(bool info_changed, bool pos_changed, bool vis_changed) {
+	if (GetZone()) {
+		GetZone()->AddSpawnUpdate(GetID(), info_changed, pos_changed, vis_changed);
+	}
 }
 
 void Spawn::RemoveSpawnAccess(Spawn* spawn) {
