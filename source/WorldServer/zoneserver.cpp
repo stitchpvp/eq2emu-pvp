@@ -1107,7 +1107,7 @@ bool ZoneServer::HasClientRangeSpawn(shared_ptr<Client> client, int32 spawn_id) 
 
 	lock_guard<mutex> guard(client_range_mutex_map[client]);
 
-	return client_range->count(spawn_id) > 0;
+	return client_range && client_range->count(spawn_id) > 0;
 }
 
 void ZoneServer::SetClientRangeDistance(shared_ptr<Client> client, int32 spawn_id, float distance) {
