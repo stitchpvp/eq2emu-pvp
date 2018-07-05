@@ -1047,13 +1047,19 @@ void ZoneServer::AddEnemyList(NPC* npc){
 }
 
 void ZoneServer::AddToSpawnRangeMap(shared_ptr<Client> client) {
-	lock_guard<mutex> guard(spawn_range_mutex);
+	lock_guard<mutex> spawn_guard(spawn_range_mutex);
+	lock_guard<mutex> client_guard(client_range_mutex);
+
 	spawn_range_map.insert(make_pair(client, make_unique<map<int32, float>>()));
+	client_range_mutex_map[client];
 }
 
 void ZoneServer::RemoveFromSpawnRangeMap(shared_ptr<Client> client) {
-	lock_guard<mutex> guard(spawn_range_mutex);
+	lock_guard<mutex> spawn_guard(spawn_range_mutex);
+	lock_guard<mutex> client_guard(client_range_mutex);
+
 	spawn_range_map.erase(client);
+	client_range_mutex_map.erase(client);
 }
 
 map<int32, float>* ZoneServer::GetClientRangeMap(shared_ptr<Client> client) {
@@ -1071,6 +1077,8 @@ map<int32, float>* ZoneServer::GetClientRangeMap(shared_ptr<Client> client) {
 void ZoneServer::RemoveFromClientRangeMap(shared_ptr<Client> client, int32 spawn_id) {
 	map<int32, float>* client_range = GetClientRangeMap(client);
 
+	lock_guard<mutex> guard(client_range_mutex_map[client]);
+
 	if (client_range) {
 		client_range->erase(spawn_id);
 	}
@@ -1078,6 +1086,8 @@ void ZoneServer::RemoveFromClientRangeMap(shared_ptr<Client> client, int32 spawn
 
 float ZoneServer::GetClientRangeDistance(shared_ptr<Client> client, int32 spawn_id) {
 	map<int32, float>* client_range = GetClientRangeMap(client);
+
+	lock_guard<mutex> guard(client_range_mutex_map[client]);
 
 	if (client_range) {
 		auto spawn = client_range->find(spawn_id);
@@ -1094,11 +1104,16 @@ float ZoneServer::GetClientRangeDistance(shared_ptr<Client> client, int32 spawn_
 
 bool ZoneServer::HasClientRangeSpawn(shared_ptr<Client> client, int32 spawn_id) {
 	map<int32, float>* client_range = GetClientRangeMap(client);
+
+	lock_guard<mutex> guard(client_range_mutex_map[client]);
+
 	return client_range->count(spawn_id) > 0;
 }
 
 void ZoneServer::SetClientRangeDistance(shared_ptr<Client> client, int32 spawn_id, float distance) {
 	map<int32, float>* client_range = GetClientRangeMap(client);
+
+	lock_guard<mutex> guard(client_range_mutex_map[client]);
 
 	if (client_range) {
 		(*client_range)[spawn_id] = distance;
