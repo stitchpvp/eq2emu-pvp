@@ -933,19 +933,25 @@ void Entity::CalculateBonuses() {
 	prim_power_bonus = floor(float(prim_power_bonus));
 	sta_hp_bonus = floor(float(sta_hp_bonus));
 
+	sint32 total_hp = GetTotalHP();
+	sint32 total_power = GetTotalPower();
+
 	SetTotalHP(GetTotalHPBase() + values->health + sta_hp_bonus);
 	SetTotalPower(GetTotalPowerBase() + values->power + prim_power_bonus);
 
+	sint32 hp_difference = GetTotalHP() - total_hp;
+	sint32 power_difference = GetTotalPower() - total_power;
+
 	if (GetHP() > GetTotalHP()) {
 		SetHP(GetTotalHP());
-	} else {
-		SetHP(GetHP() + values->health);
+	} else if (hp_difference > 0) {
+		SetHP(GetHP() + hp_difference);
 	}
 
 	if (GetPower() > GetTotalPower()) {
 		SetPower(GetTotalPower());
-	} else {
-		SetPower(GetPower() + values->power);
+	} else if (power_difference > 0) {
+		SetPower(GetPower() + power_difference);
 	}
 
 	info->max_concentration += values->concentration;
@@ -1343,7 +1349,6 @@ void Entity::DismissPet(NPC* pet, bool from_death) {
 		if (!from_death) {
 			// set the pet flag to false, owner to 0, and give the mob its old brain back
 			pet->SetPet(false);
-			pet->SetOwner(nullptr);
 			pet->SetBrain(new Brain(pet));
 			pet->SetDismissing(false);
 		}
@@ -1363,6 +1368,8 @@ void Entity::DismissPet(NPC* pet, bool from_death) {
 			static_cast<Player*>(owner)->ResetPetInfo();
 		}
 	}
+
+	pet->SetOwner(nullptr);
 
 	// remove the spawn from the world
 	if (!from_death && pet->GetPetType() != PET_TYPE_CHARMED) {

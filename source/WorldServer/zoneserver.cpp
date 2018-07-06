@@ -4045,7 +4045,7 @@ void ZoneServer::KillSpawn(Spawn* dead, Spawn* killer, bool send_packet, int8 da
 			spellProcess->RemoveSpellFromQueue(static_cast<Player*>(dead), true);
 		}
 
-		if (dead->IsPet()) {
+		if (dead->IsPet() && static_cast<NPC*>(dead)->GetOwner()) {
 			static_cast<NPC*>(dead)->GetOwner()->DismissPet(static_cast<NPC*>(dead), true);
 		} else {
 			dead_entity->DismissPet(static_cast<NPC*>(dead_entity->GetPet()));
@@ -6048,14 +6048,16 @@ void ZoneServer::SendDispellPacket(Entity* caster, Spawn* target, string dispell
 }
 
 void ZoneServer::DismissAllPets() {
-	Spawn* spawn = 0;
-	map<int32, Spawn*>::iterator itr;
 	MSpawnList.readlock(__FUNCTION__, __LINE__);
-	for (itr = spawn_list.begin(); itr != spawn_list.end(); itr++) {
-		spawn = itr->second;
-		if (spawn && spawn->IsPet() && ((NPC*)spawn)->GetOwner())
-			((NPC*)spawn)->GetOwner()->DismissPet((NPC*)spawn);
+
+	for (const auto& kv : spawn_list) {
+		Spawn* spawn = kv.second;
+
+		if (spawn && spawn->IsPet() && static_cast<NPC*>(spawn)->GetOwner()) {
+			static_cast<NPC*>(spawn)->GetOwner()->DismissPet(static_cast<NPC*>(spawn));
+		}
 	}
+
 	MSpawnList.releasereadlock(__FUNCTION__, __LINE__);
 }
 

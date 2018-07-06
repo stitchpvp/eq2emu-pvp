@@ -117,8 +117,9 @@ void Brain::Think() {
 				m_body->InCombat(false);
 
 				// Do not set a players pet to full health once they stop combat
-				if (!m_body->IsPet() || (m_body->IsPet() && !m_body->GetOwner()->IsPlayer()))
+				if (!m_body->IsPet() || (m_body->IsPet() && (m_body->GetOwner() && !m_body->GetOwner()->IsPlayer()))) {
 					m_body->SetHP(m_body->GetTotalHP());
+				}
 			}
 
 			CheckBuffs();
@@ -374,17 +375,20 @@ bool Brain::HasRecovered() {
 }
 
 void Brain::AddToEncounter(Entity* entity) {
-
 	// If player pet then set the entity to the pets owner
-	if (entity->IsPet() && ((NPC*)entity)->GetOwner()->IsPlayer())
-		entity = ((NPC*)entity)->GetOwner();
+	if (entity->IsPet() && static_cast<NPC*>(entity)->GetOwner()) {
+		entity = static_cast<NPC*>(entity)->GetOwner();
+	}
 
 	// If player or bot then get the group
 	int32 group_id = 0;
+
 	if (entity->IsPlayer() || entity->IsBot()) {
 		m_playerInEncounter = true;
-		if (entity->GetGroupMemberInfo())
+
+		if (entity->GetGroupMemberInfo()) {
 			group_id = entity->GetGroupMemberInfo()->group_id;
+		}
 	}
 
 	// Insert the entity into the encounter list, if there is a group add all group members as well
@@ -393,16 +397,16 @@ void Brain::AddToEncounter(Entity* entity) {
 	if (group_id > 0) {
 		world.GetGroupManager()->GroupLock(__FUNCTION__, __LINE__);
 
-		deque<GroupMemberInfo*>::iterator itr;
 		deque<GroupMemberInfo*>* members = world.GetGroupManager()->GetGroupMembers(group_id);
-		for (itr = members->begin(); itr != members->end(); itr++) {
-			if (entity->GetZone() == (*itr)->client->GetPlayer()->GetZone())
-				m_encounter.push_back((*itr)->client->GetPlayer()->GetID());
+
+		for (const auto member : *members) {
+			if (member && entity->GetZone() == member->client->GetPlayer()->GetZone()) {
+				m_encounter.push_back(member->client->GetPlayer()->GetID());
+			}
 		}
 
 		world.GetGroupManager()->ReleaseGroupLock(__FUNCTION__, __LINE__);
-	}
-	else {
+	} else {
 		m_encounter.push_back(entity->GetID());
 	}
 	MEncounter.releasewritelock(__FUNCTION__, __LINE__);
@@ -479,23 +483,24 @@ void CombatPetBrain::Think() {
 
 	// All this Brain does is make the pet follow its owner, the combat comes from the default brain
 
-	if (GetBody()->EngagedInCombat() || !GetBody()->IsPet() || GetBody()->IsMezzedOrStunned())
+	if (GetBody()->EngagedInCombat() || !GetBody()->IsPet() || GetBody()->IsMezzedOrStunned()) {
 		return;
+	}
 	
-	LogWrite(NPC_AI__DEBUG, 7, "NPC_AI", "Pet AI code called for %s", GetBody()->GetName());
+	Entity* target = GetBody()->GetOwner();
 
 	// If owner is a player and player has stay set then return out
-	if (GetBody()->GetOwner()->IsPlayer() && ((Player*)GetBody()->GetOwner())->GetInfoStruct()->pet_movement == 1)
+	if (!target || (target && target->IsPlayer() && static_cast<Player*>(target)->GetInfoStruct()->pet_movement == 1)) {
 		return;
-
-	Entity* target = GetBody()->GetOwner();
+	}
 
 	// Get distance from the owner
 	float distance = GetBody()->GetDistance(target);
 
 	// If out of melee range then move closer
-	if (distance > MAX_COMBAT_RANGE)
+	if (distance > MAX_COMBAT_RANGE) {
 		MoveCloser(target);
+	}
 }
 
 /* Example of how to override the default AI */

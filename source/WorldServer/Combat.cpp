@@ -953,57 +953,67 @@ bool Entity::HealSpawn(Spawn* target, string heal_type, int32 low_heal, int32 hi
 }
 
 void Entity::AddHate(Entity* attacker, sint32 hate, bool unprovoked) {
-	if(!attacker || GetHP() <= 0 || attacker->GetHP() <= 0)
+	if (!attacker || !Alive() || !attacker->Alive()) {
 		return;
+	}
 
 	// If a players pet and protect self is off
-	if (IsPet() && ((NPC*)this)->GetOwner()->IsPlayer() && ((((Player*)((NPC*)this)->GetOwner())->GetInfoStruct()->pet_behavior & 2) == 0))
+	if (IsPet() && static_cast<NPC*>(this)->GetOwner() && static_cast<NPC*>(this)->GetOwner()->IsPlayer() && !(static_cast<Player*>(static_cast<NPC*>(this)->GetOwner())->GetInfoStruct()->pet_behavior & 2)) {
 		return;
+	}
 
 	if (IsNPC()) {
-		LogWrite(COMBAT__DEBUG, 3, "Combat", "Add NPC_AI Hate: Victim '%s', Attacker '%s', Hate: %i", GetName(), attacker->GetName(), hate);
+		auto npc = static_cast<NPC*>(this);
 
-		((NPC*)this)->Brain()->AddHate(attacker, hate, unprovoked);
+		npc->Brain()->AddHate(attacker, hate, unprovoked);
 
-		// if encounter size is 0 then add the attacker to the encounter
-		if (!unprovoked && ((NPC*)this)->Brain()->GetEncounterSize() == 0)
-			((NPC*)this)->Brain()->AddToEncounter(attacker);
+		if (!unprovoked && npc->Brain()->GetEncounterSize() == 0) {
+			npc->Brain()->AddToEncounter(attacker);
+		}
 	}
 
 	if (attacker->GetThreatTransfer() && hate > 0) {
-		Spawn* transfer_target = (Entity*)GetZone()->GetSpawnByID(attacker->GetThreatTransfer()->Target);
+		Spawn* transfer_target = GetZone()->GetSpawnByID(attacker->GetThreatTransfer()->Target);
+
 		if (transfer_target && transfer_target->IsEntity()) {
 			sint32 transfered_hate = hate * (GetThreatTransfer()->Amount / 100);
 			hate -= transfered_hate;
-			this->AddHate((Entity*)transfer_target, transfered_hate);
+
+			this->AddHate(static_cast<Entity*>(transfer_target), transfered_hate);
 		}
 	}
 
 	// If pet is adding hate add some to the pets owner as well
-	if (attacker->IsNPC() && ((NPC*)attacker)->IsPet())
-		AddHate(((NPC*)attacker)->GetOwner(), 1);
+	if (attacker->IsNPC() && static_cast<NPC*>(attacker)->IsPet()) {
+		AddHate(static_cast<NPC*>(attacker)->GetOwner(), hate * 0.1);
+	}
 
 	// If player and player has a pet and protect master is set add hate to the pet
-	if (IsPlayer() && HasPet() && (((Player*)this)->GetInfoStruct()->pet_behavior & 1)) {
-		// If we have a combat pet add hate to it
-		if (((Player*)this)->GetPet())
-			AddHate(((Player*)this)->GetPet(), 1);
-		if (((Player*)this)->GetCharmedPet())
-			AddHate(((Player*)this)->GetCharmedPet(), 1);
+	if (IsPlayer() && HasPet() && static_cast<Player*>(this)->GetInfoStruct()->pet_behavior & 1) {
+		if (static_cast<Player*>(this)->GetPet()) {
+			AddHate(static_cast<Player*>(this)->GetPet(), 1);
+		}
+
+		if (static_cast<Player*>(this)->GetCharmedPet()) {
+			AddHate(static_cast<Player*>(this)->GetCharmedPet(), 1);
+		}
 	}
 
 	// If this spawn has a spawn group then add the attacker to the hate list of the other
 	// group members if not already in their list
 	if (HasSpawnGroup()) {
 		vector<Spawn*>* group = GetSpawnGroup();
-		vector<Spawn*>::iterator itr;
-		for (itr = group->begin(); itr != group->end(); itr++) {
-			if (!(*itr)->IsNPC())
-				continue;
-			NPC* spawn = (NPC*)(*itr);
-			if (spawn->Brain()->GetHate(attacker) == 0)
-				spawn->Brain()->AddHate(attacker, 1, unprovoked);
+
+		for (const auto& spawn : *group) {
+			if (spawn->IsNPC()) {
+				NPC* npc = static_cast<NPC*>(spawn);
+
+				if (npc->Brain()->GetHate(attacker) == 0) {
+					npc->Brain()->AddHate(attacker, 1, unprovoked);
+				}
+			}
 		}
+
 		safe_delete(group);
 	}
 }

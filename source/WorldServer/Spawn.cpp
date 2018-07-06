@@ -322,7 +322,7 @@ void Spawn::InitializeFooterPacketData(Player* player, PacketStruct* footer) {
 
 EQ2Packet* Spawn::spawn_serialize(Player* player, int16 version){
 	// If spawn is NPC AND is pet && owner is a player && owner is the player passed to this function && player's char sheet pet id is 0
-	if (IsNPC() && ((NPC*)this)->IsPet() && ((NPC*)this)->GetOwner()->IsPlayer() && player == ((NPC*)this)->GetOwner() && player->GetInfoStruct()->pet_id == 0) {
+	if (IsNPC() && static_cast<NPC*>(this)->IsPet() && static_cast<NPC*>(this)->GetOwner() && static_cast<NPC*>(this)->GetOwner()->IsPlayer() && player == static_cast<NPC*>(this)->GetOwner() && !player->GetInfoStruct()->pet_id) {
 		((Player*)((NPC*)this)->GetOwner())->GetInfoStruct()->pet_id = player->spawn_id;
 		player->SetCharSheetChanged(true);
 	}
@@ -683,72 +683,86 @@ void Spawn::SetZone(ZoneServer* in_zone){
 
 
 /*** HIT POINT ***/
-void Spawn::SetHP(sint32 new_val, bool setUpdateFlags){
-	if(new_val == 0){
+void Spawn::SetHP(sint32 new_val, bool setUpdateFlags) {
+	if (new_val == 0) {
 		ClearRunningLocations();
 		CalculateRunningLocation(true);
 	}
-	if(new_val > basic_info.max_hp)
-		SetInfo(&basic_info.max_hp, new_val, setUpdateFlags);
-	SetInfo(&basic_info.cur_hp, new_val, setUpdateFlags);
-	if(/*IsPlayer() &&*/ GetZone() && basic_info.cur_hp > 0 && basic_info.cur_hp < basic_info.max_hp)
-		GetZone()->AddDamagedSpawn(this);
 
-	if (IsEntity() && ((Entity*)this)->GetGroupMemberInfo()) {
-		((Entity*)this)->UpdateGroupMemberInfo();
-		if (IsPlayer())
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
-		else
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id);
+	if (new_val > basic_info.max_hp) {
+		SetInfo(&basic_info.max_hp, new_val, setUpdateFlags);
 	}
 
-	if (IsNPC() && ((NPC*)this)->IsPet() && ((NPC*)this)->GetOwner()->IsPlayer()) {
-		Player* player = (Player*)((NPC*)this)->GetOwner();
+	SetInfo(&basic_info.cur_hp, new_val, setUpdateFlags);
+
+	if (GetZone() && basic_info.cur_hp > 0 && basic_info.cur_hp < basic_info.max_hp) {
+		GetZone()->AddDamagedSpawn(this);
+	}
+
+	if (IsEntity() && static_cast<Entity*>(this)->GetGroupMemberInfo()) {
+		static_cast<Entity*>(this)->UpdateGroupMemberInfo();
+
+		if (IsPlayer()) {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
+		} else {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id);
+		}
+	}
+
+	if (IsNPC() && static_cast<NPC*>(this)->IsPet() && static_cast<NPC*>(this)->GetOwner() && static_cast<NPC*>(this)->GetOwner()->IsPlayer()) {
+		Player* player = static_cast<Player*>(static_cast<NPC*>(this)->GetOwner());
+
 		if (player->GetPet() && player->GetCharmedPet()) {
 			if (this == player->GetPet()) {
 				player->GetInfoStruct()->pet_health_pct = (float)basic_info.cur_hp / (float)basic_info.max_hp;
 				player->SetCharSheetChanged(true);
 			}
-		}
-		else {
+		} else {
 			player->GetInfoStruct()->pet_health_pct = (float)basic_info.cur_hp / (float)basic_info.max_hp;
 			player->SetCharSheetChanged(true);
 		}
 	}
 
-	if (IsPlayer())
-		((Player*)this)->SetCharSheetChanged(true);
+	if (IsPlayer()) {
+		static_cast<Player*>(this)->SetCharSheetChanged(true);
+	}
 }
 void Spawn::SetTotalHP(sint32 new_val){
-	if(basic_info.hp_base == 0)
+	if (basic_info.hp_base == 0) {
 		SetTotalHPBase(new_val);
-	SetInfo(&basic_info.max_hp, new_val);
-
-	if(GetZone() && basic_info.cur_hp > 0 && basic_info.cur_hp < basic_info.max_hp)
-		GetZone()->AddDamagedSpawn(this);
-
-	if (IsEntity() && ((Entity*)this)->GetGroupMemberInfo()) {
-		((Entity*)this)->UpdateGroupMemberInfo();
-		if (IsPlayer())
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
-		else
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id);
 	}
 
-	if (IsNPC() && ((NPC*)this)->IsPet() && ((NPC*)this)->GetOwner()->IsPlayer()) {
-		Player* player = (Player*)((NPC*)this)->GetOwner();
+	SetInfo(&basic_info.max_hp, new_val);
+
+	if (GetZone() && basic_info.cur_hp > 0 && basic_info.cur_hp < basic_info.max_hp) {
+		GetZone()->AddDamagedSpawn(this);
+	}
+
+	if (IsEntity() && static_cast<Entity*>(this)->GetGroupMemberInfo()) {
+		static_cast<Entity*>(this)->UpdateGroupMemberInfo();
+
+		if (IsPlayer()) {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
+		} else {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id);
+		}
+	}
+
+	if (IsNPC() && static_cast<NPC*>(this)->IsPet() && static_cast<NPC*>(this)->GetOwner() && static_cast<NPC*>(this)->GetOwner()->IsPlayer()) {
+		Player* player = static_cast<Player*>(static_cast<NPC*>(this)->GetOwner());
+
 		if (player->GetPet() && player->GetCharmedPet()) {
 			if (this == player->GetPet()) {
 				player->GetInfoStruct()->pet_health_pct = (float)basic_info.cur_hp / (float)basic_info.max_hp;
 				player->SetCharSheetChanged(true);
 			}
-		}
-		else {
+		} else {
 			player->GetInfoStruct()->pet_health_pct = (float)basic_info.cur_hp / (float)basic_info.max_hp;
 			player->SetCharSheetChanged(true);
 		}
 	}
 }
+
 void Spawn::SetTotalHPBase(sint32 new_val)
 {
 	SetInfo(&basic_info.hp_base, new_val);
@@ -779,81 +793,101 @@ sint32 Spawn::GetTotalHPBase()
 
 
 /*** POWER ***/
-void Spawn::SetPower(sint32 power, bool setUpdateFlags){
-	if(power > basic_info.max_power)
+void Spawn::SetPower(sint32 power, bool setUpdateFlags) {
+	if (power > basic_info.max_power) {
 		SetInfo(&basic_info.max_power, power, setUpdateFlags);
-	SetInfo(&basic_info.cur_power, power, setUpdateFlags);
-	if(/*IsPlayer() &&*/ GetZone() && basic_info.cur_power < basic_info.max_power)
-		GetZone()->AddDamagedSpawn(this);
-
-	if (IsEntity() && ((Entity*)this)->GetGroupMemberInfo()) {
-		((Entity*)this)->UpdateGroupMemberInfo();
-		if (IsPlayer())
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
-		else
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id);
 	}
 
-	if (IsNPC() && ((NPC*)this)->IsPet() && ((NPC*)this)->GetOwner()->IsPlayer()) {
+	SetInfo(&basic_info.cur_power, power, setUpdateFlags);
+
+	if(GetZone() && basic_info.cur_power < basic_info.max_power) {
+		GetZone()->AddDamagedSpawn(this);
+	}
+
+	if (IsEntity() && static_cast<Entity*>(this)->GetGroupMemberInfo()) {
+		static_cast<Entity*>(this)->UpdateGroupMemberInfo();
+
+		if (IsPlayer()) {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
+		} else {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id);
+		}
+	}
+
+
+	if (IsNPC() && static_cast<NPC*>(this)->IsPet() && static_cast<NPC*>(this)->GetOwner() && static_cast<NPC*>(this)->GetOwner()->IsPlayer()) {
 		Player* player = (Player*)((NPC*)this)->GetOwner();
+
 		if (player->GetPet() && player->GetCharmedPet()) {
 			if (this == player->GetPet()) {
 				player->GetInfoStruct()->pet_power_pct = (float)basic_info.cur_power / (float)basic_info.max_power;
 				player->SetCharSheetChanged(true);
 			}
-		}
-		else {
+		} else {
 			player->GetInfoStruct()->pet_power_pct = (float)basic_info.cur_power / (float)basic_info.max_power;
 			player->SetCharSheetChanged(true);
 		}
 	}
+
+	if (IsPlayer()) {
+		static_cast<Player*>(this)->SetCharSheetChanged(true);
+	}
 }
-void Spawn::SetTotalPower(sint32 new_val)
-{
-	if(basic_info.power_base == 0)
+
+void Spawn::SetTotalPower(sint32 new_val) {
+	if (basic_info.power_base == 0) {
 		SetTotalPowerBase(new_val);
+	}
+
 	SetInfo(&basic_info.max_power, new_val);
 
-	if(GetZone() && basic_info.cur_power < basic_info.max_power)
+	if (GetZone() && basic_info.cur_power < basic_info.max_power) {
 		GetZone()->AddDamagedSpawn(this);
-
-	if (IsEntity() && ((Entity*)this)->GetGroupMemberInfo()) {
-		((Entity*)this)->UpdateGroupMemberInfo();
-		if (IsPlayer())
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
-		else
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id);
 	}
 
-	if (IsNPC() && ((NPC*)this)->IsPet() && ((NPC*)this)->GetOwner()->IsPlayer()) {
+	if (IsEntity() && static_cast<Entity*>(this)->GetGroupMemberInfo()) {
+		static_cast<Entity*>(this)->UpdateGroupMemberInfo();
+
+		if (IsPlayer()) {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
+		} else {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id);
+		}
+	}
+
+	if (IsNPC() && static_cast<NPC*>(this)->IsPet() && static_cast<NPC*>(this)->GetOwner() && static_cast<NPC*>(this)->GetOwner()->IsPlayer()) {
 		Player* player = (Player*)((NPC*)this)->GetOwner();
+
 		if (player->GetPet() && player->GetCharmedPet()) {
 			if (this == player->GetPet()) {
 				player->GetInfoStruct()->pet_power_pct = (float)basic_info.cur_power / (float)basic_info.max_power;
 				player->SetCharSheetChanged(true);
 			}
-		}
-		else {
+		} else {
 			player->GetInfoStruct()->pet_power_pct = (float)basic_info.cur_power / (float)basic_info.max_power;
 			player->SetCharSheetChanged(true);
 		}
 	}
 }
-void Spawn::SetTotalPowerBase(sint32 new_val)
-{
+
+void Spawn::SetTotalPowerBase(sint32 new_val) {
 	SetInfo(&basic_info.power_base, new_val);
 
-	if(GetZone() && basic_info.cur_power < basic_info.max_power)
+	if (GetZone() && basic_info.cur_power < basic_info.max_power) {
 		GetZone()->AddDamagedSpawn(this);
+	}
 
-	if (IsEntity() && ((Entity*)this)->GetGroupMemberInfo()) {
-		((Entity*)this)->UpdateGroupMemberInfo();
-		if (IsPlayer())
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
-		else
-			world.GetGroupManager()->SendGroupUpdate(((Entity*)this)->GetGroupMemberInfo()->group_id);
+	if (IsEntity() && static_cast<Entity*>(this)->GetGroupMemberInfo()) {
+		static_cast<Entity*>(this)->UpdateGroupMemberInfo();
+
+		if (IsPlayer()) {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id, GetZone()->GetClientBySpawn(this));
+		} else {
+			world.GetGroupManager()->SendGroupUpdate(static_cast<Entity*>(this)->GetGroupMemberInfo()->group_id);
+		}
 	}
 }
+
 sint32 Spawn::GetPower()
 {
 	return basic_info.cur_power;
