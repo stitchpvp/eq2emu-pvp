@@ -911,7 +911,7 @@ void LoginServer::SendStatus() {
 		lss->status = 1;
 
 	lss->num_zones = numzones.load();
-	lss->num_players = numclients.load();
+	lss->num_players = 0; //numclients.load();
 	lss->world_max_level = rule_manager.GetGlobalRule(R_Player, MaxLevel)->GetInt8();
 	SendPacket(pack);
 	delete pack;
