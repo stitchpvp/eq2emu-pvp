@@ -73,23 +73,16 @@ Database::Database() {
 }
 
 bool Database::Init() {
-  char host[200], user[200], passwd[200], database[200];
+  char* host = getenv("DATABASE_HOST");
+  char* user = getenv("DATABASE_USERNAME");
+  char* passwd = getenv("DATABASE_PASSWORD");
+  char* database = getenv("DATABASE_NAME");
   int32 port = 0;
   bool compression = false;
-  bool items[6] = {false, false, false, false, false, false};
-
-  if (!ReadDBINI(host, user, passwd, database, port, compression, items)) {
-    exit(1);
-  }
-
-  if (!items[0] || !items[1] || !items[2] || !items[3]) {
-    LogWrite(DATABASE__ERROR, 0, "DB", "Incomplete DB.INI file.");
-    LogWrite(DATABASE__ERROR, 0, "DB", "Read README.TXT!");
-    exit(1);
-  }
 
   int32 errnum = 0;
   char errbuf[MYSQL_ERRMSG_SIZE];
+
   if (!Open(host, user, passwd, database, port, &errnum, errbuf)) {
     LogWrite(DATABASE__ERROR, 0, "DB", "Failed to connect to database: Error: %s", errbuf);
     HandleMysqlError(errnum);

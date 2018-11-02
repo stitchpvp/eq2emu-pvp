@@ -545,35 +545,15 @@ void ZoneList::Add(ZoneServer* zone) {
   zlist.push_back(zone);
   MZoneList.releasewritelock(__FUNCTION__, __LINE__);
 }
+
 void ZoneList::Remove(ZoneServer* zone) {
   MZoneList.writelock(__FUNCTION__, __LINE__);
   zlist.remove(zone);
   MZoneList.releasewritelock(__FUNCTION__, __LINE__);
 }
+
 ZoneServer* ZoneList::Get(const char* zone_name, bool loadZone) {
-  list<ZoneServer*>::iterator zone_iter;
-  ZoneServer* tmp = 0;
-  ZoneServer* ret = 0;
-  MZoneList.readlock(__FUNCTION__, __LINE__);
-  for (zone_iter = zlist.begin(); zone_iter != zlist.end(); zone_iter++) {
-    tmp = *zone_iter;
-    if (!tmp->isZoneShuttingDown() && !tmp->IsInstanceZone() && strlen(zone_name) == strlen(tmp->GetZoneName()) &&
-        strncasecmp(tmp->GetZoneName(), zone_name, strlen(zone_name)) == 0) {
-      if (tmp->NumPlayers() < 30 || tmp->IsCityZone())
-        ret = tmp;
-      break;
-    }
-  }
-
-  MZoneList.releasereadlock(__FUNCTION__, __LINE__);
-
-  if (!ret) {
-    if (loadZone) {
-      ret = new ZoneServer(zone_name);
-      database.LoadZoneInfo(ret);
-      ret->Init();
-    }
-  }
+  ZoneServer* ret = new ZoneServer(zone_name);
   return ret;
 }
 
@@ -593,15 +573,6 @@ ZoneServer* ZoneList::Get(int32 id, bool loadZone) {
   MZoneList.releasereadlock(__FUNCTION__, __LINE__);
   if (ret)
     tmp = ret;
-  else if (loadZone) {
-    string* zonename = database.GetZoneName(id);
-    if (zonename) {
-      tmp = new ZoneServer(zonename->c_str());
-      database.LoadZoneInfo(tmp);
-      tmp->Init();
-      safe_delete(zonename);
-    }
-  }
   return tmp;
 }
 

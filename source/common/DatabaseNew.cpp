@@ -50,62 +50,10 @@ DatabaseNew::~DatabaseNew() {
 }
 
 bool DatabaseNew::Connect() {
-  char line[256], *key, *val;
-  char host[256], user[64], password[64], database[64];
-  bool found_section = false;
-  FILE* f;
-
-  if ((f = fopen(DB_INI, "r")) == NULL) {
-    LogWrite(DATABASE__ERROR, 0, "Database", "Unable to read %s\n", DB_INI);
-    return false;
-  }
-
-  memset(host, 0, sizeof(host));
-  memset(user, 0, sizeof(user));
-  memset(password, 0, sizeof(password));
-  memset(database, 0, sizeof(database));
-
-  while (fgets(line, sizeof(line), f) != NULL) {
-    if (line[0] == '#' || line[0] == '\n' || line[0] == '\r')
-      continue;
-
-    if (!found_section) {
-      if (strncasecmp(line, "[Database]", 10) == 0)
-        found_section = true;
-    } else {
-      if ((key = strtok(line, "=")) != NULL) {
-        if ((val = strtok(NULL, "\r\n")) != NULL) {
-          if (strncasecmp(line, "host", 4) == 0)
-            strncpy(host, val, sizeof(host) - 1);
-          else if (strncasecmp(line, "user", 4) == 0)
-            strncpy(user, val, sizeof(user) - 1);
-          else if (strncasecmp(line, "password", 8) == 0)
-            strncpy(password, val, sizeof(password) - 1);
-          else if (strncasecmp(line, "database", 8) == 0)
-            strncpy(database, val, sizeof(database) - 1);
-        }
-      }
-    }
-  }
-
-  fclose(f);
-
-  if (host[0] == '\0') {
-    LogWrite(DATABASE__ERROR, 0, "Database", "Unknown 'host' in '%s'\n", DB_INI);
-    return false;
-  }
-  if (user[0] == '\0') {
-    LogWrite(DATABASE__ERROR, 0, "Database", "Unknown 'user' in '%s'\n", DB_INI);
-    return false;
-  }
-  if (password[0] == '\0') {
-    LogWrite(DATABASE__ERROR, 0, "Database", "Unknown 'password' in '%s'\n", DB_INI);
-    return false;
-  }
-  if (database[0] == '\0') {
-    LogWrite(DATABASE__ERROR, 0, "Database", "Unknown 'database' in '%s'\n", DB_INI);
-    return false;
-  }
+  const char* host = const_cast<char*>(getenv("DATABASE_HOST"));
+  const char* user = const_cast<char*>(getenv("DATABASE_USERNAME"));
+  const char* password = const_cast<char*>(getenv("DATABASE_PASSWORD"));
+  const char* database = const_cast<char*>(getenv("DATABASE_NAME"));
 
   return Connect(host, user, password, database);
 }

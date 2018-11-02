@@ -29,4 +29,4 @@ RUN mkdir /scripts \
 
 WORKDIR /release
 
-CMD ["./world"]
+ENTRYPOINT ["./world"]

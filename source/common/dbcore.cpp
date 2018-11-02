@@ -75,67 +75,10 @@ DBcore::~DBcore() {
 }
 
 bool DBcore::ReadDBINI(char* host, char* user, char* passwd, char* database, int32& port, bool& compress, bool* items) {
-  char line[256], *key, *val;
-  bool on_database_section = false;
-  FILE* f;
-
-  if ((f = fopen(DB_INI_FILE, "r")) == NULL) {
-    LogWrite(DATABASE__ERROR, 0, "DBCore", "Unable to open '%s' for reading", DB_INI_FILE);
-    return false;
-  }
-
-  //read each line
-  while (fgets(line, sizeof(line), f) != NULL) {
-
-    //remove any new line or carriage return
-    while ((key = strstr(line, "\n")) != NULL)
-      *key = '\0';
-    while ((key = strstr(line, "\r")) != NULL)
-      *key = '\0';
-
-    //ignore blank lines and commented lines
-    if (strlen(line) == 0 || line[0] == '#')
-      continue;
-
-    key = strtok(line, "=");
-
-    //don't do anything until we find the [Database] section
-    if (!on_database_section && strncasecmp(key, "[Database]", 10) == 0)
-      on_database_section = true;
-    else {
-      val = strtok(NULL, "=");
-
-      if (strcasecmp(key, "host") == 0) {
-        strcpy(host, val);
-        items[0] = true;
-      } else if (strcasecmp(key, "user") == 0) {
-        strcpy(user, val);
-        items[1] = true;
-      } else if (strcasecmp(key, "password") == 0) {
-        strcpy(passwd, val);
-        items[2] = true;
-      } else if (strcasecmp(key, "database") == 0) {
-        strcpy(database, val);
-        items[3] = true;
-      } else if (strcasecmp(key, "port") == 0) {
-        port = atoi(val);
-        items[4] = true;
-      } else if (strcasecmp(key, "compression") == 0) {
-        if (strcasecmp(val, "on") == 0) {
-          compress = true;
-          items[5] = true;
-          LogWrite(DATABASE__INFO, 0, "DBCore", "DB Compression on.");
-        }
-      }
-    }
-  }
-
-  fclose(f);
-
-  if (!on_database_section) {
-    LogWrite(DATABASE__ERROR, 0, "DBCore", "[Database] section not found in '%s'", DB_INI_FILE);
-    return false;
-  }
+  host = getenv("DATABASE_HOST");
+  user = getenv("DATABASE_USERNAME");
+  passwd = getenv("DATABASE_PASSWORD");
+  database = getenv("DATABASE_NAME");
 
   return true;
 }

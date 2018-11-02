@@ -863,7 +863,7 @@ void LoginServer::SendStatus() {
     lss->status = 1;
 
   lss->num_zones = numzones.load();
-  lss->num_players = numclients.load();
+  lss->num_players = 0; //numclients.load();
   lss->world_max_level = rule_manager.GetGlobalRule(R_Player, MaxLevel)->GetInt8();
   SendPacket(pack);
   delete pack;
@@ -962,11 +962,8 @@ int32 LoginServer::DetermineCharacterLoginRequest(UsertoWorldRequest_Struct* utw
 	utwrs->response = -2;
 	*/
   //printf("Response is %i for %i\n",utwrs->response,id);
-  if ((strcmp(net.GetWorldAddress(), utwr->ip_address) == 0) && (strlen(net.GetInternalWorldAddress()) > 0))
-    strcpy(utwrs->ip_address, net.GetInternalWorldAddress());
-  else
-    strcpy(utwrs->ip_address, net.GetWorldAddress());
-  utwrs->port = net.GetWorldPort();
+  strcpy(utwrs->ip_address, net.GetWorldAddress());
+  utwrs->port = net.GetPublicPort();
   utwrs->worldid = utwr->worldid;
   SendPacket(outpack);
   delete outpack;
